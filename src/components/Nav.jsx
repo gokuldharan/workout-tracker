@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Dumbbell, Plus, BarChart3 } from 'lucide-react'
+import { Home, Dumbbell, Plus, BarChart3, Sparkles } from 'lucide-react'
 
 const links = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/exercises', icon: Dumbbell, label: 'Exercises' },
   { to: '/workout', icon: Plus, label: 'Log' },
   { to: '/stats', icon: BarChart3, label: 'Stats' },
+  { to: '/chat', icon: Sparkles, label: 'AI' },
 ]
 
 export default function Nav() {
@@ -17,7 +18,7 @@ export default function Nav() {
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1.5 text-xs transition-colors ${
+              `flex flex-col items-center gap-0.5 px-2 py-1.5 text-xs transition-colors ${
                 isActive ? 'text-indigo-400' : 'text-[#a0a0a0] hover:text-white'
               }`
             }
