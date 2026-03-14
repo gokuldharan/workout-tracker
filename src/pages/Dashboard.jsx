@@ -5,6 +5,8 @@ import { getRecentHistory, getExercises, getAllHistory } from '../lib/api'
 import { formatDate, volume, categoryColors, today } from '../lib/utils'
 import { loadWorkoutState } from '../lib/workoutStorage'
 import { generateInsights, getConsistencyStreak, getRecentPRs } from '../lib/insights'
+import { computeBodyMapData } from '../lib/bodyMapUtils'
+import BodyMap from '../components/BodyMap'
 
 export default function Dashboard() {
   const [recent, setRecent] = useState([])
@@ -96,6 +98,12 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* Body Map */}
+      <div className="bg-[#1a1a1a] rounded-xl border border-[#2a2a2a] p-4 mb-5">
+        <h2 className="text-sm font-semibold mb-3 text-[#a0a0a0] uppercase tracking-wide">Muscle Map</h2>
+        <BodyMap scores={computeBodyMapData(allHistory, exercises, loadWorkoutState())} />
+      </div>
 
       {/* Resume active workout banner */}
       {(() => {
