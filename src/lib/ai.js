@@ -67,18 +67,6 @@ export function summarizeData(history) {
   }
 }
 
-const SYSTEM_PROMPT = `You are an expert personal trainer and sports scientist embedded in a workout tracking app called IronLog. You have access to the user's complete training history.
-
-Your role:
-- Analyze their workout data and provide specific, actionable coaching
-- Answer questions about their training, form, programming, nutrition, and recovery
-- Be encouraging but honest — point out issues when you see them
-- Use data from their history to back up your advice
-- Keep responses concise and scannable (use bold, bullets, short paragraphs)
-- When discussing exercises, reference their actual numbers and trends
-
-You're having an ongoing conversation. Previous messages and context are preserved across sessions.`
-
 /**
  * Call Claude API for single-shot analysis (used by Stats page).
  */
@@ -110,61 +98,6 @@ Keep each point to 1-2 sentences. Be concise but insightful.`,
           content: `Here's my workout data:\n\n${JSON.stringify(summary, null, 2)}\n\nAnalyze my training and give me specific, actionable insights.`,
         },
       ],
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.error?.message || `API error: ${response.status}`)
-  }
-
-  const data = await response.json()
-  return data.content[0]?.text || 'No response from AI.'
-}
-
-/**
- * Send a chat message with full conversation history and workout context.
- * Returns the assistant's response text.
- */
-export async function sendChatMessage(apiKey, userMessage, conversationHistory, workoutSummary) {
-  // Build messages array from conversation history
-  const messages = []
-
-  // If there's workout context and this is the start or the context is stale, inject it
-  if (workoutSummary) {
-    messages.push({
-      role: 'user',
-      content: `[WORKOUT DATA - AUTO-INJECTED]\nHere's my current training data for reference:\n${JSON.stringify(workoutSummary, null, 2)}\n\nPlease use this data to inform your responses. You don't need to analyze it all now — just reference it when relevant.`,
-    })
-    messages.push({
-      role: 'assistant',
-      content: `Got it! I have your training data loaded. I can see ${workoutSummary.totalSessions} workout sessions spanning ${workoutSummary.dateRange}, tracking ${workoutSummary.exercises?.length || 0} exercises. Ask me anything about your training!`,
-    })
-  }
-
-  // Add conversation history (skip system messages, keep user/assistant pairs)
-  for (const msg of conversationHistory) {
-    if (msg.role === 'user' || msg.role === 'assistant') {
-      messages.push({ role: msg.role, content: msg.content })
-    }
-  }
-
-  // Add the new user message
-  messages.push({ role: 'user', content: userMessage })
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      system: SYSTEM_PROMPT,
-      messages,
     }),
   })
 

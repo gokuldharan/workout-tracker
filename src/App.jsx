@@ -7,7 +7,6 @@ import LogWorkout from './pages/LogWorkout'
 import Stats from './pages/Stats'
 import WorkoutSession from './pages/WorkoutSession'
 import TemplateEditor from './pages/TemplateEditor'
-import Chat from './pages/Chat'
 
 export default function App() {
   return (
@@ -21,7 +20,6 @@ export default function App() {
         <Route path="/workout/:dayId" element={<WorkoutSession />} />
         <Route path="/templates/:dayId" element={<TemplateEditor />} />
         <Route path="/stats" element={<Stats />} />
-        <Route path="/chat" element={<Chat />} />
       </Routes>
       <Nav />
     </>

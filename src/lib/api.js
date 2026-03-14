@@ -161,34 +161,6 @@ export async function getLastSessionsForExercises(exerciseIds) {
   return map
 }
 
-// AI Conversations
-export async function getConversations(limit = 100) {
-  const { data, error } = await supabase
-    .from('ai_conversations')
-    .select('*')
-    .order('created_at', { ascending: true })
-    .limit(limit)
-  if (error) throw error
-  return data
-}
-
-export async function addMessage(role, content, contextSummary = null) {
-  const { data, error } = await supabase
-    .from('ai_conversations')
-    .insert({ role, content, context_summary: contextSummary })
-    .select()
-  if (error) throw error
-  return data[0]
-}
-
-export async function clearConversations() {
-  const { error } = await supabase
-    .from('ai_conversations')
-    .delete()
-    .gte('id', 0)
-  if (error) throw error
-}
-
 // Stats
 export async function getExerciseStats(exerciseId) {
   const history = await getHistory(exerciseId)
