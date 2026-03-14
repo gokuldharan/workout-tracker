@@ -75,6 +75,73 @@ export async function addExercise(id, name, category, muscleGroup) {
   return data[0]
 }
 
+// Day Templates
+export async function getTemplates() {
+  const { data, error } = await supabase
+    .from('day_templates')
+    .select('*')
+    .order('id')
+  if (error) throw error
+  return data
+}
+
+export async function getTemplate(id) {
+  const { data, error } = await supabase
+    .from('day_templates')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateTemplate(id, exercises) {
+  const { error } = await supabase
+    .from('day_templates')
+    .update({ exercises, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// Batch insert (for day-based workout finish)
+export async function addSessionBatch(sessions) {
+  const { data, error } = await supabase
+    .from('history')
+    .insert(sessions)
+    .select()
+  if (error) throw error
+  return data
+}
+
+// Get most recent session for an exercise (for "last time" reference)
+export async function getLastSession(exerciseId) {
+  const { data, error } = await supabase
+    .from('history')
+    .select('*')
+    .eq('exercise_id', exerciseId)
+    .order('date', { ascending: false })
+    .limit(1)
+  if (error) throw error
+  return data[0] || null
+}
+
+// Batch fetch last sessions for multiple exercises
+export async function getLastSessionsForExercises(exerciseIds) {
+  if (!exerciseIds.length) return {}
+  const { data, error } = await supabase
+    .from('history')
+    .select('*')
+    .in('exercise_id', exerciseIds)
+    .order('date', { ascending: false })
+  if (error) throw error
+  // Keep only the most recent per exercise
+  const map = {}
+  for (const row of data) {
+    if (!map[row.exercise_id]) map[row.exercise_id] = row
+  }
+  return map
+}
+
 // Stats
 export async function getExerciseStats(exerciseId) {
   const history = await getHistory(exerciseId)

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, TrendingUp, Calendar, Dumbbell } from 'lucide-react'
+import { Activity, TrendingUp, Calendar, Dumbbell, Play } from 'lucide-react'
 import { getRecentHistory, getExercises } from '../lib/api'
-import { formatDate, volume, categoryColors } from '../lib/utils'
+import { formatDate, volume, categoryColors, today } from '../lib/utils'
+import { loadWorkoutState } from '../lib/workoutStorage'
 
 export default function Dashboard() {
   const [recent, setRecent] = useState([])
@@ -41,12 +42,34 @@ export default function Dashboard() {
         <StatCard icon={TrendingUp} label="Volume" value={`${(totalVolume / 1000).toFixed(0)}k`} />
       </div>
 
+      {/* Resume active workout banner */}
+      {(() => {
+        const saved = loadWorkoutState()
+        if (saved && saved.date === today()) {
+          return (
+            <Link
+              to={`/workout/${saved.dayId}`}
+              className="flex items-center gap-3 bg-indigo-600/10 border border-indigo-500/30 rounded-xl p-4 mb-4 hover:bg-indigo-600/20 transition-colors"
+            >
+              <Play size={20} className="text-indigo-400" />
+              <div>
+                <p className="text-sm font-medium text-indigo-300">Resume {saved.dayName}</p>
+                <p className="text-xs text-[#a0a0a0]">
+                  {saved.exercises.filter((e) => e.done).length} / {saved.exercises.length} exercises done
+                </p>
+              </div>
+            </Link>
+          )
+        }
+        return null
+      })()}
+
       {/* Quick Log */}
       <Link
-        to="/log"
+        to="/workout"
         className="block w-full bg-indigo-600 hover:bg-indigo-500 text-white text-center py-3 rounded-xl font-medium mb-6 transition-colors"
       >
-        + Log Workout
+        + Start Workout
       </Link>
 
       {/* Recent Activity */}

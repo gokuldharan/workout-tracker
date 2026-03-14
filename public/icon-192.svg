@@ -1,0 +1,13 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'>
+  <rect width='192' height='192' rx='38' fill='#0a0a0a'/>
+  <g transform='translate(96, 96)' fill='none' stroke='#818cf8' stroke-width='5' stroke-linecap='round'>
+    <!-- bar -->
+    <line x1='-57.599999999999994' y1='0' x2='57.599999999999994' y2='0'/>
+    <!-- left weight -->
+    <rect x='-67.19999999999999' y='-34.56' width='15.36' height='69.12' rx='3' fill='#818cf8'/>
+    <rect x='-53.760000000000005' y='-24.96' width='11.52' height='49.92' rx='2' fill='#6366f1'/>
+    <!-- right weight -->
+    <rect x='51.84' y='-34.56' width='15.36' height='69.12' rx='3' fill='#818cf8'/>
+    <rect x='42.24' y='-24.96' width='11.52' height='49.92' rx='2' fill='#6366f1'/>
+  </g>
+</svg>

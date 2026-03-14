@@ -4,7 +4,7 @@ import { Home, Dumbbell, Plus, BarChart3 } from 'lucide-react'
 const links = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/exercises', icon: Dumbbell, label: 'Exercises' },
-  { to: '/log', icon: Plus, label: 'Log' },
+  { to: '/workout', icon: Plus, label: 'Log' },
   { to: '/stats', icon: BarChart3, label: 'Stats' },
 ]
 
