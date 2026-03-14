@@ -1,29 +1,43 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, ArrowUp, ArrowDown, X, Plus, Save } from 'lucide-react'
-import { getTemplate, getExercises, updateTemplate } from '../lib/api'
+import { ArrowLeft, ArrowUp, ArrowDown, X, Plus, Save, Trash2 } from 'lucide-react'
+import { getTemplate, getTemplates, getExercises, updateTemplate, createTemplate, deleteTemplate } from '../lib/api'
 import { categoryColors } from '../lib/utils'
 
 export default function TemplateEditor() {
   const { dayId } = useParams()
   const navigate = useNavigate()
-  const [template, setTemplate] = useState(null)
+  const isNew = dayId === 'new'
+
+  const [templateName, setTemplateName] = useState('')
   const [exerciseIds, setExerciseIds] = useState([])
   const [allExercises, setAllExercises] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [addId, setAddId] = useState('')
+  const [nextId, setNextId] = useState(4)
 
   useEffect(() => {
-    Promise.all([getTemplate(Number(dayId)), getExercises()])
-      .then(([tpl, ex]) => {
-        setTemplate(tpl)
+    async function init() {
+      const ex = await getExercises()
+      setAllExercises(ex)
+
+      if (isNew) {
+        const templates = await getTemplates()
+        const maxId = templates.reduce((max, t) => Math.max(max, t.id), 0)
+        setNextId(maxId + 1)
+        setTemplateName(`Day ${maxId + 1}`)
+        setExerciseIds([])
+      } else {
+        const tpl = await getTemplate(Number(dayId))
+        setTemplateName(tpl.name)
         setExerciseIds(tpl.exercises || [])
-        setAllExercises(ex)
-      })
-      .finally(() => setLoading(false))
-  }, [dayId])
+      }
+      setLoading(false)
+    }
+    init()
+  }, [dayId, isNew])
 
   const exMap = Object.fromEntries(allExercises.map((e) => [e.id, e]))
 
@@ -53,14 +67,29 @@ export default function TemplateEditor() {
   }
 
   const handleSave = async () => {
+    if (!templateName.trim()) { alert('Template name is required'); return }
     setSaving(true)
     try {
-      await updateTemplate(Number(dayId), exerciseIds)
+      if (isNew) {
+        await createTemplate(nextId, templateName.trim(), exerciseIds)
+      } else {
+        await updateTemplate(Number(dayId), exerciseIds, templateName.trim())
+      }
       navigate('/workout')
     } catch (err) {
       alert('Error saving: ' + err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete "${templateName}"? This cannot be undone.`)) return
+    try {
+      await deleteTemplate(Number(dayId))
+      navigate('/workout')
+    } catch (err) {
+      alert('Error deleting: ' + err.message)
     }
   }
 
@@ -83,10 +112,22 @@ export default function TemplateEditor() {
         <ArrowLeft size={16} /> Back
       </Link>
 
-      <h1 className="text-xl font-bold mb-1">Edit {template?.name}</h1>
-      <p className="text-sm text-[#a0a0a0] mb-5">
-        Reorder, add, or remove exercises. Changes apply to future workouts only.
+      <h1 className="text-xl font-bold mb-1">{isNew ? 'New Template' : 'Edit Template'}</h1>
+      <p className="text-sm text-[#a0a0a0] mb-4">
+        {isNew ? 'Create a new workout template.' : 'Changes apply to future workouts only.'}
       </p>
+
+      {/* Template name */}
+      <div className="mb-5">
+        <label className="text-xs text-[#a0a0a0] mb-1 block">Template Name</label>
+        <input
+          type="text"
+          value={templateName}
+          onChange={(e) => setTemplateName(e.target.value)}
+          placeholder="e.g. Day 4"
+          className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+        />
+      </div>
 
       {/* Exercise list */}
       <div className="space-y-2 mb-4">
@@ -132,6 +173,10 @@ export default function TemplateEditor() {
             </div>
           )
         })}
+
+        {exerciseIds.length === 0 && (
+          <p className="text-sm text-[#555] text-center py-6">No exercises yet. Add some below.</p>
+        )}
       </div>
 
       {/* Add exercise */}
@@ -168,7 +213,7 @@ export default function TemplateEditor() {
             onClick={() => { setShowAdd(false); setAddId('') }}
             className="px-3 py-2 text-[#a0a0a0] hover:text-white text-sm transition-colors"
           >
-            ✕
+            &#10005;
           </button>
         </div>
       )}
@@ -177,11 +222,21 @@ export default function TemplateEditor() {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full bg-green-600 hover:bg-green-500 disabled:bg-[#222] disabled:text-[#555] text-white py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+        className="w-full bg-green-600 hover:bg-green-500 disabled:bg-[#222] disabled:text-[#555] text-white py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 mb-3"
       >
         <Save size={18} />
-        {saving ? 'Saving...' : 'Save Template'}
+        {saving ? 'Saving...' : isNew ? 'Create Template' : 'Save Template'}
       </button>
+
+      {/* Delete (only for editing existing, not for Day 1-3 originals) */}
+      {!isNew && Number(dayId) > 3 && (
+        <button
+          onClick={handleDelete}
+          className="w-full border border-red-500/20 hover:bg-red-500/10 text-red-400 py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+        >
+          <Trash2 size={18} /> Delete Template
+        </button>
+      )}
     </div>
   )
 }

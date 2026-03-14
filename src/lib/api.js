@@ -95,10 +95,29 @@ export async function getTemplate(id) {
   return data
 }
 
-export async function updateTemplate(id, exercises) {
+export async function updateTemplate(id, exercises, name) {
+  const updates = { exercises, updated_at: new Date().toISOString() }
+  if (name !== undefined) updates.name = name
   const { error } = await supabase
     .from('day_templates')
-    .update({ exercises, updated_at: new Date().toISOString() })
+    .update(updates)
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function createTemplate(id, name, exercises) {
+  const { data, error } = await supabase
+    .from('day_templates')
+    .insert({ id, name, exercises })
+    .select()
+  if (error) throw error
+  return data[0]
+}
+
+export async function deleteTemplate(id) {
+  const { error } = await supabase
+    .from('day_templates')
+    .delete()
     .eq('id', id)
   if (error) throw error
 }

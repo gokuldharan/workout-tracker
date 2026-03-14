@@ -46,7 +46,7 @@ function DayPicker() {
             <div>
               <p className="text-sm font-medium text-indigo-300">Resume {savedWorkout.dayName}</p>
               <p className="text-xs text-[#a0a0a0]">
-                {savedWorkout.exercises.filter((e) => e.done).length} / {savedWorkout.exercises.length} exercises done
+                {savedWorkout.exercises.reduce((s, e) => s + e.sets.filter((x) => x.done).length, 0)} / {savedWorkout.exercises.reduce((s, e) => s + e.sets.length, 0)} sets done
               </p>
             </div>
           </div>
@@ -87,6 +87,20 @@ function DayPicker() {
             </div>
           )
         })}
+
+        {/* New Template card */}
+        <Link
+          to="/templates/new"
+          className="flex items-center gap-4 p-4 bg-[#1a1a1a] rounded-xl border border-dashed border-[#333] hover:border-indigo-500/40 hover:bg-[#222] transition-colors"
+        >
+          <div className="w-12 h-12 bg-[#222] rounded-xl flex items-center justify-center shrink-0">
+            <Plus size={22} className="text-[#555]" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[#a0a0a0]">New Template</p>
+            <p className="text-xs text-[#555]">Create a custom workout day</p>
+          </div>
+        </Link>
       </div>
 
       {/* Quick single-exercise link */}
@@ -94,7 +108,7 @@ function DayPicker() {
         to="/log"
         className="block text-center text-sm text-[#a0a0a0] hover:text-white mt-6 transition-colors"
       >
-        Or log a single exercise →
+        Or log a single exercise &rarr;
       </Link>
     </div>
   )
@@ -108,10 +122,10 @@ function LiveWorkout({ dayId }) {
     loading,
     saving,
     allExercises,
-    doneCount,
-    totalCount,
+    setsDone,
+    setsTotal,
     updateSets,
-    toggleDone,
+    toggleSetDone,
     addExercise,
     removeExercise,
     swapExercise,
@@ -164,7 +178,6 @@ function LiveWorkout({ dayId }) {
       addExercise(ex)
       setAddExId('')
       setShowAddExercise(false)
-      // Expand the newly added exercise
       setExpandedIndex(state.exercises.length)
     }
   }
@@ -210,7 +223,7 @@ function LiveWorkout({ dayId }) {
             isExpanded={expandedIndex === i}
             onToggleExpand={handleToggleExpand}
             onUpdateSets={updateSets}
-            onToggleDone={toggleDone}
+            onToggleSetDone={toggleSetDone}
             onRemove={removeExercise}
             onSwap={swapExercise}
             allExercises={allExercises}
@@ -253,26 +266,35 @@ function LiveWorkout({ dayId }) {
               onClick={() => { setShowAddExercise(false); setAddExId('') }}
               className="px-3 py-2 text-[#a0a0a0] hover:text-white text-sm transition-colors"
             >
-              ✕
+              &#10005;
             </button>
           </div>
         )}
       </div>
 
-      {/* Sticky bottom bar */}
+      {/* Sticky bottom bar — set-based progress */}
       <div className="fixed bottom-16 left-0 right-0 bg-[#141414] border-t border-[#2a2a2a] z-40">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="text-sm">
-            <span className="text-white font-medium">{doneCount}</span>
-            <span className="text-[#a0a0a0]"> / {totalCount} exercises</span>
+        <div className="max-w-lg mx-auto px-4 py-3">
+          {/* Progress bar */}
+          <div className="w-full bg-[#222] rounded-full h-1.5 mb-2">
+            <div
+              className="bg-green-500 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${setsTotal > 0 ? (setsDone / setsTotal) * 100 : 0}%` }}
+            />
           </div>
-          <button
-            onClick={handleFinish}
-            disabled={saving || doneCount === 0}
-            className="px-6 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-[#222] disabled:text-[#555] text-white rounded-xl text-sm font-medium transition-colors"
-          >
-            {saving ? 'Saving...' : 'Finish Workout'}
-          </button>
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <span className="text-white font-medium">{setsDone}</span>
+              <span className="text-[#a0a0a0]"> / {setsTotal} sets</span>
+            </div>
+            <button
+              onClick={handleFinish}
+              disabled={saving || setsDone === 0}
+              className="px-6 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-[#222] disabled:text-[#555] text-white rounded-xl text-sm font-medium transition-colors"
+            >
+              {saving ? 'Saving...' : 'Finish Workout'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

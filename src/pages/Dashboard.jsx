@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, TrendingUp, Calendar, Dumbbell, Play } from 'lucide-react'
-import { getRecentHistory, getExercises } from '../lib/api'
+import { Activity, Dumbbell, Play, Flame, Trophy, TrendingUp } from 'lucide-react'
+import { getRecentHistory, getExercises, getAllHistory } from '../lib/api'
 import { formatDate, volume, categoryColors, today } from '../lib/utils'
 import { loadWorkoutState } from '../lib/workoutStorage'
+import { generateInsights, getConsistencyStreak, getRecentPRs } from '../lib/insights'
 
 export default function Dashboard() {
   const [recent, setRecent] = useState([])
+  const [allHistory, setAllHistory] = useState([])
   const [exercises, setExercises] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([getRecentHistory(30), getExercises()])
-      .then(([h, e]) => { setRecent(h); setExercises(e) })
+    Promise.all([getRecentHistory(30), getExercises(), getAllHistory()])
+      .then(([h, e, all]) => { setRecent(h); setExercises(e); setAllHistory(all) })
       .finally(() => setLoading(false))
   }, [])
 
@@ -24,23 +26,76 @@ export default function Dashboard() {
     acc[r.date].push(r)
     return acc
   }, {})
-
   const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a))
 
-  // Stats
-  const uniqueDates = new Set(recent.map((r) => r.date))
-  const totalVolume = recent.reduce((sum, r) => sum + volume(r.sets), 0)
+  // Enhanced stats
+  const streak = getConsistencyStreak(allHistory)
+  const recentPRs = getRecentPRs(allHistory)
+
+  // This week stats
+  const now = new Date()
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - now.getDay())
+  const weekStartStr = weekStart.toISOString().split('T')[0]
+  const thisWeek = allHistory.filter((h) => h.date >= weekStartStr)
+  const thisWeekDates = new Set(thisWeek.map((h) => h.date))
+  const thisWeekVol = thisWeek.reduce((sum, h) => sum + volume(h.sets), 0)
+
+  // Insights
+  const insights = generateInsights(allHistory).slice(0, 3)
 
   return (
     <div className="px-4 pt-6 pb-24 max-w-lg mx-auto w-full">
       <h1 className="text-2xl font-bold mb-6">IronLog</h1>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <StatCard icon={Calendar} label="Sessions" value={uniqueDates.size} />
-        <StatCard icon={Dumbbell} label="Exercises" value={exercises.length} />
-        <StatCard icon={TrendingUp} label="Volume" value={`${(totalVolume / 1000).toFixed(0)}k`} />
+      {/* Enhanced Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a] text-center">
+          <Flame size={18} className="mx-auto text-orange-400 mb-1" />
+          <p className="text-lg font-bold text-white">{streak}</p>
+          <p className="text-xs text-[#a0a0a0]">Wk Streak</p>
+        </div>
+        <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a] text-center">
+          <Dumbbell size={18} className="mx-auto text-indigo-400 mb-1" />
+          <p className="text-lg font-bold text-white">{thisWeekDates.size}</p>
+          <p className="text-xs text-[#a0a0a0]">This Week</p>
+        </div>
+        <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a] text-center">
+          <TrendingUp size={18} className="mx-auto text-green-400 mb-1" />
+          <p className="text-lg font-bold text-white">{thisWeekVol > 0 ? `${(thisWeekVol / 1000).toFixed(0)}k` : '0'}</p>
+          <p className="text-xs text-[#a0a0a0]">Wk Volume</p>
+        </div>
       </div>
+
+      {/* Insights */}
+      {insights.length > 0 && (
+        <div className="space-y-2 mb-5">
+          {insights.map((insight, i) => (
+            <div
+              key={i}
+              className={`rounded-xl p-3 border text-sm ${
+                insight.type === 'pr'
+                  ? 'bg-yellow-500/5 border-yellow-500/20'
+                  : insight.type === 'streak'
+                  ? 'bg-orange-500/5 border-orange-500/20'
+                  : insight.type === 'volume_up'
+                  ? 'bg-green-500/5 border-green-500/20'
+                  : insight.type === 'plateau'
+                  ? 'bg-amber-500/5 border-amber-500/20'
+                  : 'bg-[#1a1a1a] border-[#2a2a2a]'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <span className="text-base">{insight.icon}</span>
+                <div>
+                  <p className="text-white font-medium text-sm">{insight.title}</p>
+                  <p className="text-xs text-[#a0a0a0] mt-0.5">{insight.body}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Resume active workout banner */}
       {(() => {
@@ -55,7 +110,7 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm font-medium text-indigo-300">Resume {saved.dayName}</p>
                 <p className="text-xs text-[#a0a0a0]">
-                  {saved.exercises.filter((e) => e.done).length} / {saved.exercises.length} exercises done
+                  {saved.exercises.reduce((s, e) => s + e.sets.filter((x) => x.done).length, 0)} / {saved.exercises.reduce((s, e) => s + e.sets.length, 0)} sets done
                 </p>
               </div>
             </Link>
@@ -112,19 +167,9 @@ export default function Dashboard() {
         <div className="text-center text-[#a0a0a0] py-12">
           <Dumbbell size={48} className="mx-auto mb-3 opacity-30" />
           <p>No workouts logged yet</p>
-          <p className="text-sm mt-1">Tap "Log Workout" to get started</p>
+          <p className="text-sm mt-1">Tap &quot;Start Workout&quot; to get started</p>
         </div>
       )}
-    </div>
-  )
-}
-
-function StatCard({ icon: Icon, label, value }) {
-  return (
-    <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a] text-center">
-      <Icon size={18} className="mx-auto text-indigo-400 mb-1" />
-      <p className="text-lg font-bold text-white">{value}</p>
-      <p className="text-xs text-[#a0a0a0]">{label}</p>
     </div>
   )
 }
