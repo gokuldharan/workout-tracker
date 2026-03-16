@@ -180,21 +180,26 @@ export function useWorkoutSession(dayId) {
     setState((prev) => (prev ? { ...prev, date } : prev))
   }, [])
 
-  const finishWorkout = useCallback(async () => {
+  // mode: 'all' = save all sets with reps, 'completed' = only save done sets
+  const finishWorkout = useCallback(async (mode = 'all') => {
     if (!state) return
 
     setSaving(true)
     try {
-      // Only save exercises that have at least one set with reps > 0
       // Strip the `done` flag before saving to DB
       const sessions = state.exercises
-        .filter((ex) => ex.sets.some((s) => s.r > 0))
-        .map((ex) => ({
-          exercise_id: ex.exerciseId,
-          date: state.date,
-          day: state.dayName,
-          sets: ex.sets.filter((s) => s.r > 0).map(({ r, w }) => ({ r, w })),
-        }))
+        .map((ex) => {
+          const setsToSave = mode === 'completed'
+            ? ex.sets.filter((s) => s.done && s.r > 0)
+            : ex.sets.filter((s) => s.r > 0)
+          return {
+            exercise_id: ex.exerciseId,
+            date: state.date,
+            day: state.dayName,
+            sets: setsToSave.map(({ r, w }) => ({ r, w })),
+          }
+        })
+        .filter((s) => s.sets.length > 0)
 
       if (sessions.length) {
         await addSessionBatch(sessions)

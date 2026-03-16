@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Settings, Play, Plus, Clock, Dumbbell } from 'lucide-react'
+import { Settings, Play, Plus, Clock, Dumbbell, CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
 import { useWorkoutSession } from '../hooks/useWorkoutSession'
 import { getTemplates, getExercises } from '../lib/api'
 import { loadWorkoutState } from '../lib/workoutStorage'
@@ -138,6 +138,7 @@ function LiveWorkout({ dayId }) {
   const [showAddExercise, setShowAddExercise] = useState(false)
   const [addExId, setAddExId] = useState('')
   const [elapsed, setElapsed] = useState('0:00')
+  const [showFinishModal, setShowFinishModal] = useState(false)
 
   // Elapsed timer
   useEffect(() => {
@@ -155,9 +156,23 @@ function LiveWorkout({ dayId }) {
     setExpandedIndex(expandedIndex === index ? -1 : index)
   }
 
-  const handleFinish = async () => {
+  const handleFinishClick = () => {
+    if (!state) return
+    // Check if there are unchecked sets with reps
+    const uncheckedSets = state.exercises.reduce(
+      (sum, ex) => sum + ex.sets.filter((s) => !s.done && s.r > 0).length, 0
+    )
+    if (uncheckedSets > 0) {
+      setShowFinishModal(true)
+    } else {
+      handleFinish('all')
+    }
+  }
+
+  const handleFinish = async (mode) => {
+    setShowFinishModal(false)
     try {
-      await finishWorkout()
+      await finishWorkout(mode)
       navigate('/')
     } catch (err) {
       alert('Error saving: ' + err.message)
@@ -288,13 +303,97 @@ function LiveWorkout({ dayId }) {
               <span className="text-[#a0a0a0]"> / {setsTotal} sets</span>
             </div>
             <button
-              onClick={handleFinish}
+              onClick={handleFinishClick}
               disabled={saving || setsDone === 0}
               className="px-6 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-[#222] disabled:text-[#555] text-white rounded-xl text-sm font-medium transition-colors"
             >
               {saving ? 'Saving...' : 'Finish Workout'}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Finish Confirmation Modal */}
+      {showFinishModal && state && (
+        <FinishConfirmModal
+          exercises={state.exercises}
+          onSaveAll={() => handleFinish('all')}
+          onSaveCompleted={() => handleFinish('completed')}
+          onCancel={() => setShowFinishModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function FinishConfirmModal({ exercises, onSaveAll, onSaveCompleted, onCancel }) {
+  const uncheckedExercises = exercises
+    .filter((ex) => ex.sets.some((s) => !s.done && s.r > 0))
+    .map((ex) => ({
+      name: ex.name,
+      checked: ex.sets.filter((s) => s.done && s.r > 0).length,
+      unchecked: ex.sets.filter((s) => !s.done && s.r > 0).length,
+      total: ex.sets.filter((s) => s.r > 0).length,
+    }))
+
+  const totalUnchecked = uncheckedExercises.reduce((s, e) => s + e.unchecked, 0)
+  const totalChecked = exercises.reduce((s, ex) => s + ex.sets.filter((x) => x.done && x.r > 0).length, 0)
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center" onClick={onCancel}>
+      <div
+        className="bg-[#1a1a1a] rounded-t-2xl sm:rounded-2xl w-full max-w-lg border border-[#2a2a2a] p-5 max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <AlertTriangle size={20} className="text-amber-400" />
+          <h3 className="text-lg font-semibold text-white">Unchecked Sets</h3>
+        </div>
+
+        <p className="text-sm text-[#a0a0a0] mb-4">
+          You have <span className="text-white font-medium">{totalUnchecked} unchecked {totalUnchecked === 1 ? 'set' : 'sets'}</span> with
+          pre-filled weights and reps. Would you like to save them?
+        </p>
+
+        {/* Exercise breakdown */}
+        <div className="space-y-2 mb-5">
+          {uncheckedExercises.map((ex) => (
+            <div key={ex.name} className="flex items-center justify-between text-sm bg-[#222] rounded-lg px-3 py-2">
+              <span className="text-[#ccc] truncate mr-2">{ex.name}</span>
+              <div className="flex items-center gap-2 shrink-0 text-xs">
+                {ex.checked > 0 && (
+                  <span className="flex items-center gap-1 text-green-400">
+                    <CheckCircle2 size={12} /> {ex.checked}
+                  </span>
+                )}
+                <span className="flex items-center gap-1 text-[#a0a0a0]">
+                  <Circle size={12} /> {ex.unchecked}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-2">
+          <button
+            onClick={onSaveAll}
+            className="w-full py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-medium transition-colors"
+          >
+            Save All Sets ({totalChecked + totalUnchecked})
+          </button>
+          <button
+            onClick={onSaveCompleted}
+            className="w-full py-3 bg-[#222] hover:bg-[#2a2a2a] text-white rounded-xl text-sm font-medium transition-colors border border-[#333]"
+          >
+            Save Completed Only ({totalChecked})
+          </button>
+          <button
+            onClick={onCancel}
+            className="w-full py-2.5 text-[#a0a0a0] hover:text-white text-sm transition-colors"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     </div>
