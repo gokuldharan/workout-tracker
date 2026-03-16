@@ -1,509 +1,434 @@
-import { useState, useRef, useCallback } from 'react'
-import { TrendingUp, TrendingDown, Minus, X, RotateCcw } from 'lucide-react'
-import { REGION_LABELS, getRegionColor } from '../lib/bodyMapUtils'
+import { useState } from 'react'
+import { TrendingUp, TrendingDown, Minus, X } from 'lucide-react'
+import { REGION_LABELS, FRONT_REGION_IDS, BACK_REGION_IDS, getRegionColor } from '../lib/bodyMapUtils'
 import { formatDate } from '../lib/utils'
 
 // ─────────────────────────────────────────────────────────────
-// ViewBox: 300 × 660  |  8-head male proportion
-// Center: x=150  |  Shoulders: ~60-240  |  Waist: ~100-200
+// ViewBox: 300 × 620  |  8-head male proportion
+// Center: x=150  |  Stacked front + back with labels
 // ─────────────────────────────────────────────────────────────
 
-// ─── Front-view clickable regions ────────────────────────────
+// Gray body silhouette backdrop path
+const BODY_SILHOUETTE =
+  'M150,10 C168,10 174,22 174,38 C174,54 168,64 158,68' +
+  ' L162,72 C164,80 166,86 168,90' +
+  ' C178,88 202,88 226,98' +
+  ' C242,106 248,120 246,136' +
+  ' C244,148 252,156 260,172 C268,190 270,214 266,238' +
+  ' C264,248 262,254 260,256' +
+  ' C266,274 270,298 270,322 C270,334 266,340 258,342' +
+  ' C254,344 250,340 248,336 C246,328 244,316 242,306' +
+  ' C240,288 238,268 236,256' +
+  ' L234,248 C232,236 236,214 238,198 L242,178' +
+  ' C236,164 226,150 218,146' +
+  ' C212,166 206,186 202,208 C198,230 196,248 194,262' +
+  ' C198,278 200,294 198,310' +
+  ' L196,316' +
+  ' C202,332 206,358 206,388 C206,418 202,438 196,450' +
+  ' L196,460' +
+  ' C202,470 208,494 208,518 C208,542 204,562 198,576' +
+  ' C194,588 188,594 184,596' +
+  ' C178,598 168,602 166,606 L134,606 C132,602 122,598 116,596' +
+  ' C112,594 106,588 102,576' +
+  ' C96,562 92,542 92,518 C92,494 98,470 104,460' +
+  ' L104,450' +
+  ' C98,438 94,418 94,388 C94,358 98,332 104,316' +
+  ' L102,310' +
+  ' C100,294 102,278 106,262' +
+  ' C104,248 102,230 98,208 C94,186 88,166 82,146' +
+  ' C74,150 64,164 58,178' +
+  ' L62,198 C64,214 68,236 66,248 L64,256' +
+  ' C62,268 60,288 58,306' +
+  ' C56,316 54,328 52,336 C50,340 46,344 42,342' +
+  ' C34,340 30,334 30,322 C30,298 34,274 40,256' +
+  ' C38,254 36,248 34,238' +
+  ' C30,214 32,190 40,172 C48,156 56,148 54,136' +
+  ' C52,120 58,106 74,98' +
+  ' C98,88 122,88 132,90' +
+  ' C134,86 136,80 138,72 L142,68' +
+  ' C132,64 126,54 126,38 C126,22 132,10 150,10Z'
+
+// ─── Front-view clickable muscle regions ─────────────────────
 const FRONT_REGIONS = {
   shoulders: {
     paths: [
-      // Left front deltoid — rounded cap from trap to arm
-      'M122,98 C112,92 90,90 72,98 C62,104 56,118 58,132 C59,138 64,144 72,146 L82,140 C86,128 96,114 112,104Z',
-      // Right front deltoid
-      'M178,98 C188,92 210,90 228,98 C238,104 244,118 242,132 C241,138 236,144 228,146 L218,140 C214,128 204,114 188,104Z',
+      // Left deltoid — rounded cap from trap to arm
+      'M120,96 C110,90 88,90 74,98 C64,106 58,120 60,134 C62,140 66,146 74,148 L84,142 C86,128 96,112 112,102Z',
+      // Right deltoid
+      'M180,96 C190,90 212,90 226,98 C236,106 242,120 240,134 C238,140 234,146 226,148 L216,142 C214,128 204,112 188,102Z',
     ],
   },
   chest: {
     paths: [
-      // Left pec — from sternum, over to delt boundary, curved fold at bottom
-      'M150,106 C140,102 128,100 118,104 L82,140 C82,148 88,160 98,168 C108,174 130,176 146,172 L150,170Z',
+      // Left pec
+      'M148,104 C138,100 126,100 116,104 L84,142 C86,152 92,162 102,170 C112,176 132,178 148,174Z',
       // Right pec
-      'M150,106 C160,102 172,100 182,104 L218,140 C218,148 212,160 202,168 C192,174 170,176 154,172 L150,170Z',
+      'M152,104 C162,100 174,100 184,104 L216,142 C214,152 208,162 198,170 C188,176 168,178 152,174Z',
     ],
   },
-  arms: {
+  biceps: {
     paths: [
-      // Left upper arm (bicep) — from delt insertion to elbow
-      'M72,146 C64,146 52,152 46,162 L36,200 C32,216 34,234 40,244 L56,246 L62,236 L66,200 L70,168 L72,150Z',
-      // Left forearm — elbow to wrist
-      'M40,252 L58,252 C58,268 56,290 52,310 L48,336 L42,340 L30,324 L32,290 L36,264Z',
-      // Right upper arm
-      'M228,146 C236,146 248,152 254,162 L264,200 C268,216 266,234 260,244 L244,246 L238,236 L234,200 L230,168 L228,150Z',
+      // Left bicep
+      'M74,148 C66,148 54,156 48,166 L40,202 C38,216 40,232 44,240 L60,242 L64,232 L68,200 L72,168Z',
+      // Right bicep
+      'M226,148 C234,148 246,156 252,166 L260,202 C262,216 260,232 256,240 L240,242 L236,232 L232,200 L228,168Z',
+    ],
+  },
+  forearms: {
+    paths: [
+      // Left forearm
+      'M44,248 L62,248 C60,268 58,290 54,310 L50,334 L44,338 L32,322 L34,290 L38,264Z',
       // Right forearm
-      'M260,252 L242,252 C242,268 244,290 248,310 L252,336 L258,340 L270,324 L268,290 L264,264Z',
+      'M256,248 L238,248 C240,268 242,290 246,310 L250,334 L256,338 L268,322 L266,290 L262,264Z',
     ],
   },
-  core: {
+  abs: {
     paths: [
-      // Abdominals — tapered shape following oblique line
-      'M108,172 L192,172 L196,204 L194,248 C188,258 170,264 150,264 C130,264 112,258 106,248 L104,204Z',
+      // Central abs — tapered rectangle
+      'M122,176 L178,176 L178,260 C172,264 160,266 150,266 C140,266 128,264 122,260Z',
     ],
   },
-  glutes: {
+  obliques: {
     paths: [
-      // Hip flexor / iliac region (front view)
-      'M106,258 C112,268 130,274 150,274 C170,274 188,268 194,258 L200,280 C200,296 182,310 150,310 C118,310 100,296 100,280Z',
+      // Left oblique — side strip
+      'M106,176 L122,176 L122,260 C118,262 112,264 108,264 L104,210 C102,196 104,184 106,176Z',
+      // Right oblique
+      'M194,176 L178,176 L178,260 C182,262 188,264 192,264 L196,210 C198,196 196,184 194,176Z',
     ],
   },
   quads: {
     paths: [
-      // Left quad — sweeping vastus lateralis, teardrop at knee
-      'M100,312 L140,312 C142,340 142,370 140,400 C138,420 134,436 130,444 C124,454 112,454 106,444 C100,432 96,400 94,370 C92,346 94,324 100,312Z',
+      // Left quad — sweeping shape with teardrop
+      'M102,312 L144,312 C146,342 146,374 142,404 C140,422 136,438 130,448 C124,456 112,456 106,448 C100,434 96,404 94,374 C92,348 96,326 102,312Z',
       // Right quad
-      'M160,312 L200,312 C206,324 208,346 206,370 C204,400 200,432 194,444 C188,454 176,454 170,444 C166,436 162,420 160,400 C158,370 158,340 160,312Z',
-    ],
-  },
-  hamstrings: {
-    paths: [
-      // Inner thigh visible from front
-      'M140,318 L160,318 L158,430 C156,442 144,442 142,430Z',
-    ],
-  },
-  calves: {
-    paths: [
-      // Left calf — diamond shape with gastrocnemius bulge
-      'M104,462 L134,462 C136,478 134,500 130,524 C128,542 122,558 118,568 C114,576 108,576 104,568 C100,556 96,536 94,518 C92,498 94,478 98,466Z',
-      // Right calf
-      'M166,462 L196,462 C202,466 204,478 206,498 C208,518 204,536 200,556 C196,568 190,576 186,576 C182,576 176,568 172,558 C168,542 164,524 162,500 C160,478 162,470 166,462Z',
-    ],
-  },
-}
-
-// ─── Back-view clickable regions ─────────────────────────────
-const BACK_REGIONS = {
-  shoulders: {
-    paths: [
-      // Left rear deltoid
-      'M122,98 C112,92 90,90 72,98 C62,104 56,118 58,132 C59,138 64,144 72,146 L82,140 C86,128 96,114 112,104Z',
-      // Right rear deltoid
-      'M178,98 C188,92 210,90 228,98 C238,104 244,118 242,132 C241,138 236,144 228,146 L218,140 C214,128 204,114 188,104Z',
-    ],
-  },
-  back: {
-    paths: [
-      // Left upper back / rhomboids + inner lat
-      'M150,100 L118,104 C108,110 96,124 88,140 L84,156 L96,172 L150,172 L150,106Z',
-      // Right upper back
-      'M150,100 L182,104 C192,110 204,124 212,140 L216,156 L204,172 L150,172 L150,106Z',
-      // Left outer lat — V-taper wing
-      'M82,140 C74,142 66,150 62,162 L58,192 C56,212 58,232 62,244 L72,246 L80,236 L84,200 L86,168 L84,156Z',
-      // Right outer lat
-      'M218,140 C226,142 234,150 238,162 L242,192 C244,212 242,232 238,244 L228,246 L220,236 L216,200 L214,168 L216,156Z',
-    ],
-  },
-  arms: {
-    paths: [
-      // Left tricep
-      'M72,146 C64,146 52,152 46,162 L36,200 C32,216 34,234 40,244 L56,246 L62,236 L66,200 L70,168 L72,150Z',
-      // Left forearm
-      'M40,252 L58,252 C58,268 56,290 52,310 L48,336 L42,340 L30,324 L32,290 L36,264Z',
-      // Right tricep
-      'M228,146 C236,146 248,152 254,162 L264,200 C268,216 266,234 260,244 L244,246 L238,236 L234,200 L230,168 L228,150Z',
-      // Right forearm
-      'M260,252 L242,252 C242,268 244,290 248,310 L252,336 L258,340 L270,324 L268,290 L264,264Z',
-    ],
-  },
-  core: {
-    paths: [
-      // Lower back / erectors
-      'M108,174 L192,174 L196,208 L194,248 C188,258 170,264 150,264 C130,264 112,258 106,248 L104,208Z',
-    ],
-  },
-  glutes: {
-    paths: [
-      // Left glute — full round shape from back
-      'M106,258 C112,268 130,274 150,274 L150,312 C132,316 112,310 104,296 C98,284 100,268 106,258Z',
-      // Right glute
-      'M194,258 C188,268 170,274 150,274 L150,312 C168,316 188,310 196,296 C202,284 200,268 194,258Z',
-    ],
-  },
-  hamstrings: {
-    paths: [
-      // Left hamstring — full posterior thigh
-      'M100,314 L148,314 L146,430 C144,448 122,454 112,448 C102,440 96,410 94,380 C92,352 94,328 100,314Z',
-      // Right hamstring
-      'M152,314 L200,314 C206,328 208,352 206,380 C204,410 198,440 188,448 C178,454 156,448 154,430Z',
+      'M156,312 L198,312 C204,326 208,348 206,374 C204,404 200,434 194,448 C188,456 176,456 170,448 C164,438 160,422 158,404 C154,374 154,342 156,312Z',
     ],
   },
   calves: {
     paths: [
       // Left calf
-      'M104,462 L134,462 C136,478 134,500 130,524 C128,542 122,558 118,568 C114,576 108,576 104,568 C100,556 96,536 94,518 C92,498 94,478 98,466Z',
+      'M104,464 L134,464 C136,480 134,502 130,526 C128,542 122,558 118,568 C114,574 108,574 104,568 C100,556 96,536 94,520 C92,500 94,480 100,468Z',
       // Right calf
-      'M166,462 L196,462 C202,466 204,478 206,498 C208,518 204,536 200,556 C196,568 190,576 186,576 C182,576 176,568 172,558 C168,542 164,524 162,500 C160,478 162,470 166,462Z',
+      'M166,464 L196,464 C202,468 206,480 208,500 C210,520 206,542 200,556 C196,568 190,574 186,574 C182,574 176,568 172,558 C168,542 164,502 164,480Z',
     ],
   },
 }
 
-// ─── Front-view anatomical detail lines ──────────────────────
+// ─── Back-view clickable muscle regions ──────────────────────
+const BACK_REGIONS = {
+  traps: {
+    paths: [
+      // Trapezius — diamond from neck to mid-scapula
+      'M150,82 L120,96 C114,108 110,122 108,138 L112,160 L150,168 L188,160 L192,138 C190,122 186,108 180,96Z',
+    ],
+  },
+  lats: {
+    paths: [
+      // Left lat — wing shape
+      'M112,142 L108,138 C100,140 88,150 80,164 L72,192 C70,214 72,236 78,252 L92,256 L100,240 L106,200 L110,168Z',
+      // Left inner lat
+      'M112,160 L148,168 L148,244 L112,244 C108,228 106,208 108,188Z',
+      // Right lat
+      'M188,142 L192,138 C200,140 212,150 220,164 L228,192 C230,214 228,236 222,252 L208,256 L200,240 L194,200 L190,168Z',
+      // Right inner lat
+      'M188,160 L152,168 L152,244 L188,244 C192,228 194,208 192,188Z',
+    ],
+  },
+  lower_back: {
+    paths: [
+      // Erector spinae / lumbar
+      'M118,246 L182,246 L186,262 C180,272 166,278 150,278 C134,278 120,272 114,262Z',
+    ],
+  },
+  triceps: {
+    paths: [
+      // Left tricep
+      'M74,148 C66,148 54,156 48,166 L40,202 C38,216 40,232 44,240 L60,242 L64,232 L68,200 L72,168Z',
+      // Left forearm
+      'M44,248 L62,248 C60,268 58,290 54,310 L50,334 L44,338 L32,322 L34,290 L38,264Z',
+      // Right tricep
+      'M226,148 C234,148 246,156 252,166 L260,202 C262,216 260,232 256,240 L240,242 L236,232 L232,200 L228,168Z',
+      // Right forearm
+      'M256,248 L238,248 C240,268 242,290 246,310 L250,334 L256,338 L268,322 L266,290 L262,264Z',
+    ],
+  },
+  glutes: {
+    paths: [
+      // Left glute
+      'M114,272 C120,280 134,286 150,286 L150,318 C130,322 110,314 104,298 C100,286 104,274 114,272Z',
+      // Right glute
+      'M186,272 C180,280 166,286 150,286 L150,318 C170,322 190,314 196,298 C200,286 196,274 186,272Z',
+    ],
+  },
+  hamstrings: {
+    paths: [
+      // Left hamstring
+      'M100,320 L148,320 L146,434 C144,452 120,458 110,450 C100,440 94,410 92,380 C90,354 94,332 100,320Z',
+      // Right hamstring
+      'M152,320 L200,320 C206,332 210,354 208,380 C206,410 200,440 190,450 C180,458 156,452 154,434Z',
+    ],
+  },
+  calves: {
+    paths: [
+      // Left calf
+      'M104,464 L134,464 C136,480 134,502 130,526 C128,542 122,558 118,568 C114,574 108,574 104,568 C100,556 96,536 94,520 C92,500 94,480 100,468Z',
+      // Right calf
+      'M166,464 L196,464 C202,468 206,480 208,500 C210,520 206,542 200,556 C196,568 190,574 186,574 C182,574 176,568 172,558 C168,542 164,502 164,480Z',
+    ],
+  },
+}
+
+// ─── Front anatomical detail lines ───────────────────────────
 const FRONT_DETAILS = [
-  // Clavicle lines
-  'M150,98 C140,94 125,96 112,102',
-  'M150,98 C160,94 175,96 188,102',
-  // Sternal line (center chest)
-  'M150,106 L150,170',
-  // Left pec fold
-  'M98,168 C108,174 130,176 146,172',
-  // Right pec fold
-  'M202,168 C192,174 170,176 154,172',
-  // Ab segments — horizontal lines
-  'M118,190 L182,190',
-  'M116,210 L184,210',
-  'M114,230 L186,230',
-  // Linea alba (center ab line)
-  'M150,172 L150,264',
-  // Left oblique line
-  'M108,174 C104,200 102,230 106,250',
-  // Right oblique line
-  'M192,174 C196,200 198,230 194,250',
-  // Left serratus hints
-  'M104,164 L112,158',
-  'M102,174 L110,168',
-  // Right serratus hints
-  'M196,164 L188,158',
-  'M198,174 L190,168',
-  // Left quad separation — rectus femoris / vastus lateralis
-  'M120,316 C120,350 120,400 118,440',
-  // Right quad separation
-  'M180,316 C180,350 180,400 182,440',
-  // Left vastus medialis teardrop
-  'M130,420 C128,436 124,448 118,450',
-  // Right vastus medialis teardrop
-  'M170,420 C172,436 176,448 182,450',
-  // Kneecap outlines
-  'M110,450 C110,458 118,462 124,462 C130,462 134,458 134,452',
-  'M166,452 C166,458 170,462 176,462 C182,462 190,458 190,450',
-  // Left shin line (tibialis anterior)
-  'M112,470 C110,500 108,530 110,560',
-  // Right shin line
-  'M188,470 C190,500 192,530 190,560',
-  // Bicep-arm separation hints
-  'M58,162 C60,180 60,200 58,230',
-  'M242,162 C240,180 240,200 242,230',
+  // Clavicle
+  'M150,98 C140,94 126,96 116,102',
+  'M150,98 C160,94 174,96 184,102',
+  // Sternal line
+  'M150,106 L150,174',
+  // Pec folds
+  'M102,170 C112,176 132,178 148,174',
+  'M198,170 C188,176 168,178 152,174',
+  // Pec-delt separation
+  'M84,142 C90,136 100,128 116,104',
+  'M216,142 C210,136 200,128 184,104',
+  // Ab segments (6-pack)
+  'M128,192 L172,192',
+  'M126,212 L174,212',
+  'M124,232 L176,232',
+  'M124,250 L176,250',
+  // Linea alba
+  'M150,176 L150,266',
+  // Oblique diagonal lines
+  'M106,180 C104,200 102,230 108,264',
+  'M194,180 C196,200 198,230 192,264',
+  // Serratus hints (front)
+  'M108,166 L116,160',
+  'M106,176 L114,170',
+  'M192,166 L184,160',
+  'M194,176 L186,170',
+  // Quad separation lines
+  'M122,316 C122,350 122,400 120,444',
+  'M178,316 C178,350 178,400 180,444',
+  // Vastus medialis teardrop
+  'M132,424 C130,438 126,450 120,454',
+  'M168,424 C170,438 174,450 180,454',
+  // Kneecap
+  'M110,454 C110,460 118,464 126,464 C132,464 136,460 136,454',
+  'M164,454 C164,460 168,464 174,464 C180,464 190,460 190,454',
+  // Shin lines
+  'M114,472 C112,500 110,530 112,560',
+  'M186,472 C188,500 190,530 188,560',
+  // Bicep separation
+  'M60,162 C62,182 62,202 60,230',
+  'M240,162 C238,182 238,202 240,230',
 ]
 
-// ─── Back-view anatomical detail lines ───────────────────────
+// ─── Back anatomical detail lines ────────────────────────────
 const BACK_DETAILS = [
-  // Spine — dashed (handled separately with strokeDasharray)
-  // Left scapula outline
-  'M126,110 L108,128 L112,160 L138,164 L142,134Z',
-  // Right scapula outline
-  'M174,110 L192,128 L188,160 L162,164 L158,134Z',
-  // Trapezius diamond upper
-  'M130,92 L150,100 L170,92',
-  // Lat insertion / christmas tree
-  'M140,210 C144,230 148,245 150,258',
-  'M160,210 C156,230 152,245 150,258',
+  // Scapula outlines
+  'M130,112 L112,130 L116,162 L142,166 L146,136Z',
+  'M170,112 L188,130 L184,162 L158,166 L154,136Z',
+  // Trap upper border
+  'M132,92 L150,82 L168,92',
+  // Spine (drawn separately with dash)
+  // Lat inner edges
+  'M148,168 L148,244',
+  'M152,168 L152,244',
+  // Lat outer insertions
+  'M110,168 C106,190 104,218 108,246',
+  'M190,168 C194,190 196,218 192,246',
   // Erector spinae lines
-  'M142,174 C140,200 140,230 142,258',
-  'M158,174 C160,200 160,230 158,258',
-  // Glute medius line
-  'M106,260 C108,272 116,282 130,286',
-  'M194,260 C192,272 184,282 170,286',
+  'M140,248 C138,258 138,268 140,278',
+  'M160,248 C162,258 162,268 160,278',
+  // Glute medius
+  'M108,274 C112,286 120,296 134,300',
+  'M192,274 C188,286 180,296 166,300',
   // Gluteal fold
-  'M108,310 C120,316 140,318 150,316',
-  'M192,310 C180,316 160,318 150,316',
-  // Hamstring separation — biceps femoris / semitendinosus
-  'M126,320 C126,360 124,400 122,440',
-  'M174,320 C174,360 176,400 178,440',
-  // Calf diamond — medial/lateral heads
-  'M118,470 C116,490 116,510 118,540',
-  'M182,470 C184,490 184,510 182,540',
-  // Tricep horseshoe hints
-  'M50,170 C52,190 54,210 54,230',
-  'M250,170 C248,190 246,210 246,230',
-  // Inner elbow fold
-  'M40,246 L58,248',
-  'M260,246 L242,248',
+  'M108,316 C120,322 140,324 150,322',
+  'M192,316 C180,322 160,324 150,322',
+  // Hamstring separation
+  'M128,326 C128,366 126,406 124,444',
+  'M172,326 C172,366 174,406 176,444',
+  // Calf heads
+  'M118,472 C116,492 116,514 118,542',
+  'M182,472 C184,492 184,514 182,542',
+  // Tricep horseshoe
+  'M52,170 C54,190 56,212 56,234',
+  'M248,170 C246,190 244,212 244,234',
+  // Arm inner
+  'M42,248 L60,248',
+  'M258,248 L240,248',
 ]
-
-// ─── Body outline paths ──────────────────────────────────────
-const FRONT_OUTLINE =
-  // Start at top of head, go clockwise
-  // Head right side
-  'M150,8 C170,8 176,20 176,38 C176,56 170,66 158,70' +
-  // Neck right
-  ' L162,72 L164,88' +
-  // Right trap slope to shoulder
-  ' C172,90 196,88 228,98' +
-  // Right deltoid outer curve
-  ' C244,106 250,122 248,138' +
-  // Right arm outer
-  ' C246,148 254,156 262,172 C270,190 272,216 268,240' +
-  // Right elbow
-  ' C266,250 264,256 262,258' +
-  // Right forearm outer
-  ' C268,276 272,300 272,324 C272,336 268,342 260,344' +
-  // Right hand
-  ' C256,346 252,342 250,338 C248,332 246,318 244,308' +
-  // Right forearm inner
-  ' C242,290 240,270 238,258' +
-  // Right upper arm inner, back to torso
-  ' L236,248 C234,236 238,216 240,200 L244,180' +
-  // Right armpit into torso
-  ' C238,166 228,152 220,148' +
-  // Right torso — chest to waist
-  ' C214,168 208,188 204,210 C200,232 198,250 196,264' +
-  // Right hip flare
-  ' C200,280 202,296 200,312' +
-  // Right outer thigh
-  ' C204,330 208,360 208,390 C208,420 204,440 198,452' +
-  // Right knee
-  ' L198,462' +
-  // Right calf outer
-  ' C204,472 210,496 210,520 C210,544 206,564 200,578' +
-  // Right ankle
-  ' C196,590 190,596 186,598' +
-  // Right foot
-  ' C180,600 170,604 168,608 L132,608 C130,604 120,600 114,598' +
-  // Left ankle
-  ' C110,596 104,590 100,578' +
-  // Left calf outer
-  ' C94,564 90,544 90,520 C90,496 96,472 102,462' +
-  // Left knee
-  ' L102,452' +
-  // Left outer thigh
-  ' C96,440 92,420 92,390 C92,360 96,330 100,312' +
-  // Left hip
-  ' C98,296 100,280 104,264' +
-  // Left torso
-  ' C102,250 100,232 96,210 C92,188 86,168 80,148' +
-  // Left armpit
-  ' C72,152 62,166 56,180' +
-  // Left upper arm inner
-  ' L60,200 C62,216 66,236 64,248 L62,258' +
-  // Left forearm inner
-  ' C60,270 58,290 56,308' +
-  // Left hand
-  ' C54,318 52,332 50,338 C48,342 44,346 40,344' +
-  // Left forearm outer
-  ' C32,342 28,336 28,324 C28,300 32,276 38,258' +
-  // Left elbow
-  ' C36,256 34,250 32,240' +
-  // Left arm outer
-  ' C28,216 30,190 38,172 C46,156 54,148 52,138' +
-  // Left deltoid
-  ' C50,122 56,106 72,98' +
-  // Left trap to neck
-  ' C104,88 128,90 136,88 L138,72 L142,70' +
-  // Head left side, close
-  ' C130,66 124,56 124,38 C124,20 130,8 150,8Z'
-
-const BACK_OUTLINE = FRONT_OUTLINE // Same silhouette (symmetric)
 
 const TREND_CONFIG = {
-  up: { icon: TrendingUp, color: 'text-green-400', label: 'Trending up' },
-  down: { icon: TrendingDown, color: 'text-red-400', label: 'Trending down' },
+  up: { icon: TrendingUp, color: 'text-green-400', label: 'Up' },
+  down: { icon: TrendingDown, color: 'text-red-400', label: 'Down' },
   flat: { icon: Minus, color: 'text-[#a0a0a0]', label: 'Stable' },
 }
 
+// ─── Single body figure component ────────────────────────────
+function BodyFigure({ regions, details, scores, selected, onSelect, view }) {
+  return (
+    <svg viewBox="0 0 300 620" className="w-full" style={{ height: 'auto' }}>
+      {/* Layer 0: Body silhouette backdrop */}
+      <path d={BODY_SILHOUETTE} fill="#1f1f1f" stroke="none" />
+
+      {/* Layer 1: Clickable muscle fill regions */}
+      <g>
+        {Object.entries(regions).map(([regionId, { paths }]) => {
+          const data = scores[regionId]
+          const { fill, opacity } = getRegionColor(data?.daysSince ?? null)
+          const isSelected = selected === regionId
+
+          return paths.map((d, i) => (
+            <path
+              key={`${regionId}-${i}`}
+              d={d}
+              fill={fill}
+              fillOpacity={opacity}
+              stroke={isSelected ? '#fff' : 'transparent'}
+              strokeWidth={isSelected ? '2' : '0'}
+              strokeLinejoin="round"
+              className="cursor-pointer"
+              style={{ transition: 'fill-opacity 0.3s, stroke 0.2s' }}
+              onClick={() => onSelect(selected === regionId ? null : regionId)}
+            />
+          ))
+        })}
+      </g>
+
+      {/* Layer 2: Body outline */}
+      <path
+        d={BODY_SILHOUETTE}
+        fill="none"
+        stroke="#444"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        pointerEvents="none"
+      />
+
+      {/* Layer 3: Anatomical detail lines */}
+      <g pointerEvents="none">
+        {view === 'back' && (
+          <line x1="150" y1="86" x2="150" y2="278"
+            stroke="#333" strokeWidth="0.8" strokeDasharray="4,3" />
+        )}
+        {details.map((d, i) => (
+          <path key={i} d={d} fill="none" stroke="#333" strokeWidth="0.5"
+            strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+      </g>
+
+      {/* Layer 4: Structure (head, ears, hands, feet) */}
+      <g pointerEvents="none">
+        <ellipse cx="150" cy="36" rx="22" ry="28" fill="#1f1f1f" stroke="#444" strokeWidth="1.2" />
+        <ellipse cx="126" cy="38" rx="3" ry="6" fill="none" stroke="#3a3a3a" strokeWidth="0.5" />
+        <ellipse cx="174" cy="38" rx="3" ry="6" fill="none" stroke="#3a3a3a" strokeWidth="0.5" />
+        {/* Neck tendons */}
+        <path d="M142,62 C144,72 146,80 148,88" fill="none" stroke="#333" strokeWidth="0.4" />
+        <path d="M158,62 C156,72 154,80 152,88" fill="none" stroke="#333" strokeWidth="0.4" />
+        {/* Knee lines */}
+        <line x1="102" y1="458" x2="138" y2="458" stroke="#333" strokeWidth="1.2" />
+        <line x1="162" y1="458" x2="198" y2="458" stroke="#333" strokeWidth="1.2" />
+        {/* Feet */}
+        <ellipse cx="120" cy="610" rx="16" ry="5" fill="none" stroke="#3a3a3a" strokeWidth="0.6" />
+        <ellipse cx="180" cy="610" rx="16" ry="5" fill="none" stroke="#3a3a3a" strokeWidth="0.6" />
+        {/* Hands */}
+        <ellipse cx="47" cy="340" rx="7" ry="10" fill="none" stroke="#3a3a3a" strokeWidth="0.5"
+          transform="rotate(-8 47 340)" />
+        <ellipse cx="253" cy="340" rx="7" ry="10" fill="none" stroke="#3a3a3a" strokeWidth="0.5"
+          transform="rotate(8 253 340)" />
+      </g>
+
+      {/* Inline muscle group labels */}
+      <g pointerEvents="none" fontSize="8" fontWeight="500" fill="#666" textAnchor="middle">
+        {view === 'front' ? (
+          <>
+            <text x="150" y="148" fontSize="7">CHEST</text>
+            <text x="62" y="118" fontSize="6" textAnchor="end">DELTS</text>
+            <text x="238" y="118" fontSize="6" textAnchor="start">DELTS</text>
+            <text x="52" y="198" fontSize="6" textAnchor="end">BICEP</text>
+            <text x="248" y="198" fontSize="6" textAnchor="start">BICEP</text>
+            <text x="150" y="224" fontSize="7">ABS</text>
+            <text x="102" y="224" fontSize="6">OBL</text>
+            <text x="198" y="224" fontSize="6">OBL</text>
+            <text x="120" y="382" fontSize="7">QUADS</text>
+            <text x="180" y="382" fontSize="7">QUADS</text>
+            <text x="118" y="520" fontSize="6">CALF</text>
+            <text x="182" y="520" fontSize="6">CALF</text>
+          </>
+        ) : (
+          <>
+            <text x="150" y="128" fontSize="7">TRAPS</text>
+            <text x="74" y="200" fontSize="6" textAnchor="end">LAT</text>
+            <text x="226" y="200" fontSize="6" textAnchor="start">LAT</text>
+            <text x="150" y="206" fontSize="7">LATS</text>
+            <text x="150" y="268" fontSize="6">LOW BACK</text>
+            <text x="52" y="198" fontSize="6" textAnchor="end">TRI</text>
+            <text x="248" y="198" fontSize="6" textAnchor="start">TRI</text>
+            <text x="150" y="302" fontSize="7">GLUTES</text>
+            <text x="124" y="386" fontSize="7">HAMS</text>
+            <text x="176" y="386" fontSize="7">HAMS</text>
+            <text x="118" y="520" fontSize="6">CALF</text>
+            <text x="182" y="520" fontSize="6">CALF</text>
+          </>
+        )}
+      </g>
+    </svg>
+  )
+}
+
+// ─── Main BodyMap component ──────────────────────────────────
 export default function BodyMap({ scores }) {
   const [selected, setSelected] = useState(null)
-  const [view, setView] = useState('front') // 'front' | 'back'
-  const [animPhase, setAnimPhase] = useState('idle') // 'idle' | 'out' | 'in'
-  const touchStartX = useRef(null)
-  const touchStartTime = useRef(null)
-
-  const regions = view === 'front' ? FRONT_REGIONS : BACK_REGIONS
-  const details = view === 'front' ? FRONT_DETAILS : BACK_DETAILS
   const detail = selected ? scores[selected] : null
-
-  const toggleView = useCallback(() => {
-    if (animPhase !== 'idle') return
-    setAnimPhase('out')
-  }, [animPhase])
-
-  const handleTransitionEnd = useCallback(() => {
-    if (animPhase === 'out') {
-      setView((v) => (v === 'front' ? 'back' : 'front'))
-      setAnimPhase('in')
-    } else if (animPhase === 'in') {
-      setAnimPhase('idle')
-    }
-  }, [animPhase])
-
-  const handleTouchStart = (e) => {
-    touchStartX.current = e.touches[0].clientX
-    touchStartTime.current = Date.now()
-  }
-
-  const handleTouchEnd = (e) => {
-    if (touchStartX.current === null) return
-    const dx = e.changedTouches[0].clientX - touchStartX.current
-    const dt = Date.now() - (touchStartTime.current || 0)
-    // Trigger on 50px swipe or fast flick (30px in <200ms)
-    if (Math.abs(dx) > 50 || (Math.abs(dx) > 30 && dt < 200)) {
-      toggleView()
-    }
-    touchStartX.current = null
-    touchStartTime.current = null
-  }
-
-  // 3D rotation transform based on animation phase
-  const getTransform = () => {
-    switch (animPhase) {
-      case 'out': return 'rotateY(90deg)'
-      case 'in': return 'rotateY(0deg)'
-      default: return 'rotateY(0deg)'
-    }
-  }
-
-  const getTransition = () => {
-    switch (animPhase) {
-      case 'out': return 'transform 200ms ease-in'
-      case 'in': return 'transform 200ms ease-out'
-      default: return 'none'
-    }
-  }
 
   return (
     <div className="relative">
-      {/* View toggle + label */}
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-[#666] uppercase tracking-wider font-medium">
-          {view === 'front' ? 'Front' : 'Back'}
+      {/* Front view */}
+      <div className="mb-1">
+        <p className="text-[10px] text-[#555] uppercase tracking-widest font-semibold text-center mb-1">
+          Front
         </p>
-        <button
-          onClick={toggleView}
-          className="flex items-center gap-1.5 text-xs text-[#a0a0a0] hover:text-white transition-colors px-2 py-1 rounded-lg hover:bg-[#222]"
-        >
-          <RotateCcw size={12} />
-          Rotate
-        </button>
+        <BodyFigure
+          regions={FRONT_REGIONS}
+          details={FRONT_DETAILS}
+          scores={scores}
+          selected={selected}
+          onSelect={setSelected}
+          view="front"
+        />
       </div>
 
-      {/* SVG body with 3D perspective rotation */}
-      <div
-        className="relative"
-        style={{ perspective: '800px' }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        <div
-          style={{
-            transform: getTransform(),
-            transition: getTransition(),
-            transformOrigin: 'center center',
-            backfaceVisibility: 'hidden',
-          }}
-          onTransitionEnd={handleTransitionEnd}
-        >
-          <svg
-            viewBox="0 0 300 660"
-            className="w-full max-w-[280px] mx-auto"
-            style={{ height: 'auto' }}
-          >
-            {/* Layer 1: Clickable muscle fill regions */}
-            <g id="fill-regions">
-              {Object.entries(regions).map(([regionId, { paths }]) => {
-                const data = scores[regionId]
-                const { fill, opacity } = getRegionColor(data?.daysSince ?? null)
-                const isSelected = selected === regionId
-
-                return paths.map((d, i) => (
-                  <path
-                    key={`${regionId}-${i}`}
-                    d={d}
-                    fill={fill}
-                    fillOpacity={opacity}
-                    stroke={isSelected ? '#fff' : 'transparent'}
-                    strokeWidth={isSelected ? '2' : '0'}
-                    strokeLinejoin="round"
-                    className="cursor-pointer transition-all duration-200"
-                    onClick={() => setSelected(selected === regionId ? null : regionId)}
-                  />
-                ))
-              })}
-            </g>
-
-            {/* Layer 2: Body outline */}
-            <g id="body-outline" pointerEvents="none">
-              <path
-                d={view === 'front' ? FRONT_OUTLINE : BACK_OUTLINE}
-                fill="none"
-                stroke="#555"
-                strokeWidth="1.2"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            </g>
-
-            {/* Layer 3: Anatomical detail lines */}
-            <g id="detail-lines" pointerEvents="none">
-              {/* Spine dashed line on back view */}
-              {view === 'back' && (
-                <line
-                  x1="150" y1="88" x2="150" y2="264"
-                  stroke="#3a3a3a" strokeWidth="0.8"
-                  strokeDasharray="4,3"
-                />
-              )}
-              {details.map((d, i) => (
-                <path
-                  key={i}
-                  d={d}
-                  fill="none"
-                  stroke="#3a3a3a"
-                  strokeWidth="0.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              ))}
-            </g>
-
-            {/* Layer 4: Structural elements */}
-            <g id="structure" pointerEvents="none">
-              {/* Head — with subtle jaw */}
-              <ellipse cx="150" cy="36" rx="22" ry="28"
-                fill="none" stroke="#555" strokeWidth="1.2" />
-              {/* Ears */}
-              <ellipse cx="126" cy="38" rx="3" ry="6"
-                fill="none" stroke="#444" strokeWidth="0.6" />
-              <ellipse cx="174" cy="38" rx="3" ry="6"
-                fill="none" stroke="#444" strokeWidth="0.6" />
-              {/* Neck tendons hint */}
-              <path d="M142,64 C144,72 146,80 148,88" fill="none" stroke="#3a3a3a" strokeWidth="0.5" />
-              <path d="M158,64 C156,72 154,80 152,88" fill="none" stroke="#3a3a3a" strokeWidth="0.5" />
-              {/* Knee structure lines */}
-              <line x1="102" y1="455" x2="136" y2="455" stroke="#3a3a3a" strokeWidth="1.5" />
-              <line x1="164" y1="455" x2="198" y2="455" stroke="#3a3a3a" strokeWidth="1.5" />
-              {/* Feet */}
-              <ellipse cx="120" cy="612" rx="16" ry="6"
-                fill="none" stroke="#444" strokeWidth="0.8" />
-              <ellipse cx="180" cy="612" rx="16" ry="6"
-                fill="none" stroke="#444" strokeWidth="0.8" />
-              {/* Hands */}
-              <ellipse cx="46" cy="342" rx="8" ry="10"
-                fill="none" stroke="#444" strokeWidth="0.6"
-                transform="rotate(-10 46 342)" />
-              <ellipse cx="254" cy="342" rx="8" ry="10"
-                fill="none" stroke="#444" strokeWidth="0.6"
-                transform="rotate(10 254 342)" />
-            </g>
-          </svg>
-        </div>
-
-        {/* Swipe hint dots */}
-        <div className="flex justify-center gap-1.5 mt-2">
-          <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${view === 'front' ? 'bg-white' : 'bg-[#444]'}`} />
-          <span className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${view === 'back' ? 'bg-white' : 'bg-[#444]'}`} />
-        </div>
+      {/* Back view */}
+      <div className="mt-2">
+        <p className="text-[10px] text-[#555] uppercase tracking-widest font-semibold text-center mb-1">
+          Back
+        </p>
+        <BodyFigure
+          regions={BACK_REGIONS}
+          details={BACK_DETAILS}
+          scores={scores}
+          selected={selected}
+          onSelect={setSelected}
+          view="back"
+        />
       </div>
 
       {/* Legend */}
-      <div className="flex justify-center gap-3 mt-2 text-[10px] text-[#a0a0a0]">
+      <div className="flex justify-center gap-3 mt-3 text-[10px] text-[#a0a0a0]">
         <span className="flex items-center gap-1">
           <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#22c55e', opacity: 0.6 }} />
-          Recent
+          Today
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#22c55e', opacity: 0.25 }} />
-          3-5 days
+          <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#22c55e', opacity: 0.35 }} />
+          2-3 days
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#22c55e', opacity: 0.2 }} />
+          4-5 days
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#555', opacity: 0.2 }} />
@@ -516,7 +441,7 @@ export default function BodyMap({ scores }) {
         <div className="mt-3 bg-[#1a1a1a] rounded-xl border border-[#2a2a2a] p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-white font-semibold text-base">
-              {REGION_LABELS[selected]}
+              {REGION_LABELS[selected] || selected}
             </h3>
             <button onClick={() => setSelected(null)} className="text-[#a0a0a0] hover:text-white p-1 transition-colors">
               <X size={16} />
@@ -558,8 +483,8 @@ export default function BodyMap({ scores }) {
           {detail.exercises.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-[#a0a0a0] uppercase tracking-wide">Exercises</p>
-              {detail.exercises.map((ex) => (
-                <div key={ex.name} className="flex items-center justify-between text-sm">
+              {detail.exercises.map((ex, i) => (
+                <div key={`${ex.name}-${i}`} className="flex items-center justify-between text-sm">
                   <span className="text-[#ccc] truncate mr-2">{ex.name}</span>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-white font-medium">{ex.e1rm}</span>
@@ -569,6 +494,9 @@ export default function BodyMap({ scores }) {
                   </div>
                 </div>
               ))}
+              {detail.exercises.some(ex => ex.name.endsWith('²')) && (
+                <p className="text-[10px] text-[#555] mt-1">² = secondary muscle contribution</p>
+              )}
             </div>
           )}
 

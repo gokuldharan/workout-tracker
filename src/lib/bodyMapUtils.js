@@ -1,35 +1,71 @@
 import { e1rm } from './utils'
 
-// Maps exercise muscle_group values to body map regions
+// ─── Finer-grained region mapping ────────────────────────────
+// Maps exercise muscle_group values to primary body map regions
 export const REGION_MAP = {
   'Shoulders': 'shoulders',
   'Chest': 'chest',
-  'Back': 'back',
-  'Lower Back': 'back',
-  'Biceps': 'arms',
-  'Triceps': 'arms',
-  'Forearms': 'arms',
-  'Abs': 'core',
-  'Core': 'core',
+  'Back': 'lats',
+  'Lower Back': 'lower_back',
+  'Biceps': 'biceps',
+  'Triceps': 'triceps',
+  'Forearms': 'forearms',
+  'Abs': 'abs',
+  'Core': 'obliques',
   'Quads': 'quads',
   'Hamstrings': 'hamstrings',
   'Glutes': 'glutes',
   'Calves': 'calves',
 }
 
+// Secondary muscle contributions for compound exercises
+// { region, weight } — weight is multiplied against the exercise's isolation weight
+const SECONDARY_REGIONS = {
+  // Back exercises also hit traps
+  'wide-grip-lat-pulldown':          [{ region: 'traps', weight: 0.4 }],
+  'cable-rope-seated-high-row':      [{ region: 'traps', weight: 0.5 }],
+  'machine-assisted-wide-grip-pull-up': [{ region: 'traps', weight: 0.4 }],
+  'lat-pulldown-machine-wide-grip':  [{ region: 'traps', weight: 0.4 }],
+  'dumbbell-single-arm-row':         [{ region: 'traps', weight: 0.4 }],
+  // Shoulder press hits traps
+  'db-seated-shoulder-press':        [{ region: 'traps', weight: 0.5 }],
+  // Bench press hits front delts
+  'barbell-bench-press':             [{ region: 'shoulders', weight: 0.3 }],
+  // Compound leg exercises hit glutes/hamstrings
+  'hack-squat':                      [{ region: 'glutes', weight: 0.3 }],
+  'db-bulgarian-split-squat':        [{ region: 'glutes', weight: 0.4 }, { region: 'hamstrings', weight: 0.2 }],
+  'dumbbell-forward-lunge':          [{ region: 'glutes', weight: 0.3 }, { region: 'hamstrings', weight: 0.2 }],
+  'dumbbell-step-up':                [{ region: 'glutes', weight: 0.3 }],
+  // RDL hits lower back and glutes
+  'barbell-rdl':                     [{ region: 'glutes', weight: 0.4 }, { region: 'lower_back', weight: 0.3 }],
+  // Glute bridge hits hamstrings
+  'barbell-floor-glute-bridge':      [{ region: 'hamstrings', weight: 0.2 }],
+  // Hyperextension hits glutes
+  'hyperextension-roman-chair':      [{ region: 'glutes', weight: 0.3 }],
+}
+
 export const REGION_LABELS = {
-  shoulders: 'Shoulders',
-  chest: 'Chest',
-  back: 'Back',
-  arms: 'Arms',
-  core: 'Core',
+  shoulders: 'Shoulders (Deltoids)',
+  chest: 'Chest (Pectorals)',
+  biceps: 'Biceps',
+  triceps: 'Triceps',
+  forearms: 'Forearms',
+  traps: 'Upper Back (Traps)',
+  lats: 'Mid Back (Lats)',
+  lower_back: 'Lower Back (Erectors)',
+  abs: 'Abs',
+  obliques: 'Obliques',
   quads: 'Quads',
   hamstrings: 'Hamstrings',
   glutes: 'Glutes',
   calves: 'Calves',
 }
 
-// How isolated each exercise is for its target muscle (1.0 = pure isolation, lower = more compound)
+// Which regions appear in each view
+export const FRONT_REGION_IDS = ['shoulders', 'chest', 'biceps', 'forearms', 'abs', 'obliques', 'quads', 'calves']
+export const BACK_REGION_IDS = ['traps', 'lats', 'lower_back', 'triceps', 'glutes', 'hamstrings', 'calves']
+
+// How isolated each exercise is for its target muscle (1.0 = pure isolation)
 const ISOLATION_WEIGHT = {
   'barbell-bench-press': 0.65,
   'db-seated-shoulder-press': 0.7,
@@ -72,15 +108,9 @@ export function computeBodyMapData(history, exercises, activeWorkout) {
   const fourWeeksAgo = new Date(today - 28 * 86400000)
   const eightWeeksAgo = new Date(today - 56 * 86400000)
 
-  // Group exercises by body region
-  const regionExercises = {}
   const exerciseMap = {}
   for (const ex of exercises) {
     exerciseMap[ex.id] = ex
-    const region = REGION_MAP[ex.muscle_group]
-    if (!region) continue
-    if (!regionExercises[region]) regionExercises[region] = []
-    regionExercises[region].push(ex)
   }
 
   // Index history by exercise_id
@@ -101,75 +131,80 @@ export function computeBodyMapData(history, exercises, activeWorkout) {
         if (ex) {
           const region = REGION_MAP[ex.muscle_group]
           if (region) activeRegions.add(region)
+          // Also mark secondary regions
+          const secondaries = SECONDARY_REGIONS[we.exerciseId]
+          if (secondaries) {
+            for (const s of secondaries) activeRegions.add(s.region)
+          }
         }
       }
     }
   }
 
-  const scores = {}
+  // Accumulator per region: { weightedSum, totalWeight, weightedSumPrev, totalWeightPrev, lastTrained, exercises }
+  const regionAcc = {}
+  const ensureRegion = (r) => {
+    if (!regionAcc[r]) {
+      regionAcc[r] = { weightedSum: 0, totalWeight: 0, weightedSumPrev: 0, totalWeightPrev: 0, lastTrained: null, exercises: [] }
+    }
+  }
 
-  for (const [region, exList] of Object.entries(regionExercises)) {
-    let weightedSum = 0, totalWeight = 0
-    let weightedSumPrev = 0, totalWeightPrev = 0
+  // Process each exercise
+  for (const ex of exercises) {
+    const primaryRegion = REGION_MAP[ex.muscle_group]
+    if (!primaryRegion) continue
+
+    const exHist = historyByExercise[ex.id] || []
+    const isoW = ISOLATION_WEIGHT[ex.id] || 0.7
+
+    // Find last trained, recent best, prev best, all-time best
     let lastTrained = null
+    let recentBest = 0
+    let prevBest = 0
+    let allTimeBest = 0
 
-    const exerciseDetails = []
-
-    for (const ex of exList) {
-      const exHist = historyByExercise[ex.id] || []
-      const isoW = ISOLATION_WEIGHT[ex.id] || 0.7
-
-      // Find last trained date for this exercise
-      for (const h of exHist) {
-        if (!lastTrained || h.date > lastTrained) lastTrained = h.date
-      }
-
-      // Best e1RM in recent 4 weeks (current strength)
-      let recentBest = 0
-      for (const h of exHist) {
-        if (new Date(h.date + 'T12:00:00') >= fourWeeksAgo) {
-          recentBest = Math.max(recentBest, bestE1RM(h.sets))
-        }
-      }
-
-      // Best e1RM in previous 4 weeks (4-8 weeks ago) for trend
-      let prevBest = 0
-      for (const h of exHist) {
-        const d = new Date(h.date + 'T12:00:00')
-        if (d >= eightWeeksAgo && d < fourWeeksAgo) {
-          prevBest = Math.max(prevBest, bestE1RM(h.sets))
-        }
-      }
-
-      // All-time best for display
-      let allTimeBest = 0
-      for (const h of exHist) {
-        allTimeBest = Math.max(allTimeBest, bestE1RM(h.sets))
-      }
-
-      if (recentBest > 0) {
-        weightedSum += recentBest * isoW
-        totalWeight += isoW
-      }
-      if (prevBest > 0) {
-        weightedSumPrev += prevBest * isoW
-        totalWeightPrev += isoW
-      }
-
-      if (allTimeBest > 0) {
-        exerciseDetails.push({
-          name: ex.name,
-          e1rm: Math.round(allTimeBest),
-          recentE1rm: Math.round(recentBest),
-          isolationWeight: isoW,
-        })
-      }
+    for (const h of exHist) {
+      if (!lastTrained || h.date > lastTrained) lastTrained = h.date
+      const best = bestE1RM(h.sets)
+      allTimeBest = Math.max(allTimeBest, best)
+      const d = new Date(h.date + 'T12:00:00')
+      if (d >= fourWeeksAgo) recentBest = Math.max(recentBest, best)
+      if (d >= eightWeeksAgo && d < fourWeeksAgo) prevBest = Math.max(prevBest, best)
     }
 
-    const score = totalWeight > 0 ? weightedSum / totalWeight : 0
-    const prevScore = totalWeightPrev > 0 ? weightedSumPrev / totalWeightPrev : 0
+    // Add to primary region
+    ensureRegion(primaryRegion)
+    const pr = regionAcc[primaryRegion]
+    if (!pr.lastTrained || (lastTrained && lastTrained > pr.lastTrained)) pr.lastTrained = lastTrained
+    if (recentBest > 0) { pr.weightedSum += recentBest * isoW; pr.totalWeight += isoW }
+    if (prevBest > 0) { pr.weightedSumPrev += prevBest * isoW; pr.totalWeightPrev += isoW }
+    if (allTimeBest > 0) {
+      pr.exercises.push({ name: ex.name, e1rm: Math.round(allTimeBest), recentE1rm: Math.round(recentBest), isolationWeight: isoW })
+    }
 
-    // Trend: compare recent vs previous period
+    // Add to secondary regions
+    const secondaries = SECONDARY_REGIONS[ex.id]
+    if (secondaries) {
+      for (const sec of secondaries) {
+        ensureRegion(sec.region)
+        const sr = regionAcc[sec.region]
+        const secIsoW = isoW * sec.weight
+        if (!sr.lastTrained || (lastTrained && lastTrained > sr.lastTrained)) sr.lastTrained = lastTrained
+        if (recentBest > 0) { sr.weightedSum += recentBest * secIsoW; sr.totalWeight += secIsoW }
+        if (prevBest > 0) { sr.weightedSumPrev += prevBest * secIsoW; sr.totalWeightPrev += secIsoW }
+        if (allTimeBest > 0) {
+          sr.exercises.push({ name: ex.name + ' ²', e1rm: Math.round(allTimeBest), recentE1rm: Math.round(recentBest), isolationWeight: parseFloat(secIsoW.toFixed(2)) })
+        }
+      }
+    }
+  }
+
+  // Compute final scores
+  const scores = {}
+  for (const [region, acc] of Object.entries(regionAcc)) {
+    const score = acc.totalWeight > 0 ? acc.weightedSum / acc.totalWeight : 0
+    const prevScore = acc.totalWeightPrev > 0 ? acc.weightedSumPrev / acc.totalWeightPrev : 0
+
     let trend = 'flat'
     if (score > 0 && prevScore > 0) {
       const change = (score - prevScore) / prevScore
@@ -177,23 +212,18 @@ export function computeBodyMapData(history, exercises, activeWorkout) {
       else if (change < -0.03) trend = 'down'
     }
 
-    // Days since last trained
     let daysSince = null
-    if (lastTrained) {
-      daysSince = Math.floor((today - new Date(lastTrained + 'T12:00:00')) / 86400000)
+    if (acc.lastTrained) {
+      daysSince = Math.floor((today - new Date(acc.lastTrained + 'T12:00:00')) / 86400000)
     }
-
-    // Override if actively training this region right now
-    if (activeRegions.has(region)) {
-      daysSince = 0
-    }
+    if (activeRegions.has(region)) daysSince = 0
 
     scores[region] = {
       score: Math.round(score),
       trend,
-      lastTrained,
+      lastTrained: acc.lastTrained,
       daysSince,
-      exercises: exerciseDetails.sort((a, b) => b.e1rm - a.e1rm),
+      exercises: acc.exercises.sort((a, b) => b.e1rm - a.e1rm),
     }
   }
 
