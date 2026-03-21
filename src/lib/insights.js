@@ -65,7 +65,30 @@ export function generateInsights(history) {
     }
   }
 
-  // 3. Volume Trend — last 2 weeks vs prior 2 weeks
+  // 3. Regression Detection — latest e1RM drops 10%+ from all-time peak
+  const prExercises = new Set(
+    insights.filter((i) => i.type === 'pr').map((i) => i.title.replace('PR: ', ''))
+  )
+
+  for (const [name, sessions] of Object.entries(byExercise)) {
+    if (sessions.length < 3 || prExercises.has(name)) continue
+    const bestE1RM = (session) =>
+      Math.max(...session.sets.map((s) => (s.w === 0 ? s.r : s.w * (1 + s.r / 30))))
+    const latestBest = bestE1RM(sessions[sessions.length - 1])
+    const allTimeBest = Math.max(...sessions.map(bestE1RM))
+    if (allTimeBest > 0 && latestBest < allTimeBest * 0.9) {
+      const dropPct = Math.round(((allTimeBest - latestBest) / allTimeBest) * 100)
+      insights.push({
+        type: 'regressing',
+        icon: '📉',
+        title: `Regressing: ${name}`,
+        body: `e1RM is ${dropPct}% below your peak of ${Math.round(allTimeBest)} lbs. Review load, form, or recovery.`,
+        priority: 7,
+      })
+    }
+  }
+
+  // 4. Volume Trend — last 2 weeks vs prior 2 weeks
   const now = new Date()
   const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate() - 14)
   const fourWeeksAgo = new Date(now); fourWeeksAgo.setDate(now.getDate() - 28)
@@ -99,7 +122,7 @@ export function generateInsights(history) {
     }
   }
 
-  // 4. Consistency Streak
+  // 5. Consistency Streak
   const streak = getConsistencyStreak(history)
   if (streak >= 2) {
     insights.push({
@@ -111,7 +134,7 @@ export function generateInsights(history) {
     })
   }
 
-  // 5. Muscle Imbalance
+  // 6. Muscle Imbalance
   const muscleVol = {}
   for (const h of history) {
     const mg = h.exercises?.muscle_group

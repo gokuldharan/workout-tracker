@@ -32,7 +32,7 @@ function DayPicker() {
   const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]))
 
   return (
-    <div className="px-4 pt-6 pb-24 max-w-lg mx-auto w-full">
+    <div className="px-4 pt-safe pb-nav-safe max-w-lg mx-auto w-full">
       <h1 className="text-2xl font-bold mb-5">Start Workout</h1>
 
       {/* Resume banner */}

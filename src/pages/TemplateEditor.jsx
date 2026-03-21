@@ -104,7 +104,7 @@ export default function TemplateEditor() {
   const usedIds = new Set(exerciseIds)
 
   return (
-    <div className="px-4 pt-6 pb-24 max-w-lg mx-auto w-full">
+    <div className="px-4 pt-safe pb-nav-safe max-w-lg mx-auto w-full">
       <Link
         to="/workout"
         className="inline-flex items-center gap-1 text-sm text-[#a0a0a0] hover:text-white mb-4 transition-colors"

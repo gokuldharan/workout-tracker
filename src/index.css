@@ -12,3 +12,12 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* Safe area utilities for iPhone notch / Dynamic Island / home indicator */
+@utility pt-safe {
+  padding-top: max(1.5rem, env(safe-area-inset-top));
+}
+
+@utility pb-nav-safe {
+  padding-bottom: max(6rem, calc(6rem + env(safe-area-inset-bottom)));
+}

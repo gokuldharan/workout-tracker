@@ -86,7 +86,7 @@ export default function Stats() {
   const leaderboard = getE1RMLeaderboard(history)
 
   return (
-    <div className="px-4 pt-6 pb-24 max-w-lg mx-auto w-full">
+    <div className="px-4 pt-safe pb-nav-safe max-w-lg mx-auto w-full">
       <h1 className="text-2xl font-bold mb-5">Stats</h1>
 
       {/* Streak + PRs summary */}

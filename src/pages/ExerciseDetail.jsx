@@ -45,6 +45,12 @@ export default function ExerciseDetail() {
 
   const colors = categoryColors[exercise.category] || categoryColors['Core']
 
+  // Stale badge
+  const lastDate = history[0]?.date
+  const daysSinceLast = lastDate
+    ? Math.floor((Date.now() - new Date(lastDate + 'T12:00:00').getTime()) / 86400000)
+    : null
+
   // Chart data (chronological)
   const chartData = [...history]
     .reverse()
@@ -66,18 +72,29 @@ export default function ExerciseDetail() {
   }, 0)
 
   return (
-    <div className="px-4 pt-6 pb-24 max-w-lg mx-auto w-full">
+    <div className="px-4 pt-safe pb-nav-safe max-w-lg mx-auto w-full">
       {/* Header */}
       <Link to="/exercises" className="inline-flex items-center gap-1 text-sm text-[#a0a0a0] hover:text-white mb-4 transition-colors">
         <ArrowLeft size={16} /> Back
       </Link>
 
       <h1 className="text-xl font-bold mb-1">{exercise.name}</h1>
-      <div className="flex items-center gap-2 mb-5">
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
         <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
           {exercise.muscle_group}
         </span>
         <span className="text-xs text-[#a0a0a0]">{exercise.category}</span>
+        {daysSinceLast !== null && (
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            daysSinceLast <= 7
+              ? 'bg-[#222] text-[#a0a0a0]'
+              : daysSinceLast <= 14
+              ? 'bg-amber-500/10 text-amber-400'
+              : 'bg-red-500/10 text-red-400'
+          }`}>
+            {daysSinceLast === 0 ? 'Trained today' : `${daysSinceLast}d ago`}
+          </span>
+        )}
       </div>
 
       {/* Quick Stats */}

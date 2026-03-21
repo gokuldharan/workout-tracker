@@ -43,15 +43,22 @@ export default function Dashboard() {
   const thisWeekDates = new Set(thisWeek.map((h) => h.date))
   const thisWeekVol = thisWeek.reduce((sum, h) => sum + volume(h.sets), 0)
 
+  // Rolling 4-week training frequency
+  const fourWeeksAgo = new Date(now)
+  fourWeeksAgo.setDate(now.getDate() - 28)
+  const fourWeeksAgoStr = fourWeeksAgo.toISOString().split('T')[0]
+  const last4WeekDates = new Set(allHistory.filter((h) => h.date >= fourWeeksAgoStr).map((h) => h.date))
+  const avgPerWeek = (last4WeekDates.size / 4).toFixed(1)
+
   // Insights
   const insights = generateInsights(allHistory).slice(0, 3)
 
   return (
-    <div className="px-4 pt-6 pb-24 max-w-lg mx-auto w-full">
+    <div className="px-4 pt-safe pb-nav-safe max-w-lg mx-auto w-full">
       <h1 className="text-2xl font-bold mb-6">IronLog</h1>
 
       {/* Enhanced Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-2 gap-3 mb-5">
         <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a] text-center">
           <Flame size={18} className="mx-auto text-orange-400 mb-1" />
           <p className="text-lg font-bold text-white">{streak}</p>
@@ -61,6 +68,11 @@ export default function Dashboard() {
           <Dumbbell size={18} className="mx-auto text-indigo-400 mb-1" />
           <p className="text-lg font-bold text-white">{thisWeekDates.size}</p>
           <p className="text-xs text-[#a0a0a0]">This Week</p>
+        </div>
+        <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a] text-center">
+          <Activity size={18} className="mx-auto text-purple-400 mb-1" />
+          <p className="text-lg font-bold text-white">{avgPerWeek}</p>
+          <p className="text-xs text-[#a0a0a0]">Sessions/wk (4wk)</p>
         </div>
         <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a] text-center">
           <TrendingUp size={18} className="mx-auto text-green-400 mb-1" />
@@ -84,6 +96,8 @@ export default function Dashboard() {
                   ? 'bg-green-500/5 border-green-500/20'
                   : insight.type === 'plateau'
                   ? 'bg-amber-500/5 border-amber-500/20'
+                  : insight.type === 'regressing'
+                  ? 'bg-red-500/5 border-red-500/20'
                   : 'bg-[#1a1a1a] border-[#2a2a2a]'
               }`}
             >

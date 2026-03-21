@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { Plus, Check } from 'lucide-react'
+import { Plus, Check, Search } from 'lucide-react'
 import { getExercises, addSession, addExercise } from '../lib/api'
 import { today, toKebab } from '../lib/utils'
 import SetInput from '../components/SetInput'
@@ -16,6 +16,7 @@ export default function LogWorkout() {
   const [saving, setSaving] = useState(false)
   const [showNewExercise, setShowNewExercise] = useState(false)
   const [newEx, setNewEx] = useState({ name: '', category: 'Upper Body', muscleGroup: '' })
+  const [exerciseSearch, setExerciseSearch] = useState('')
 
   useEffect(() => {
     getExercises().then(setExercises)
@@ -63,20 +64,32 @@ export default function LogWorkout() {
   }
 
   return (
-    <div className="px-4 pt-6 pb-24 max-w-lg mx-auto w-full">
+    <div className="px-4 pt-safe pb-nav-safe max-w-lg mx-auto w-full">
       <h1 className="text-2xl font-bold mb-5">Log Workout</h1>
 
       {/* Exercise Picker */}
       <label className="block text-sm text-[#a0a0a0] mb-1">Exercise</label>
+      <div className="relative mb-1">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555] pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Filter exercises..."
+          value={exerciseSearch}
+          onChange={(e) => setExerciseSearch(e.target.value)}
+          className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-[#555] focus:outline-none focus:border-indigo-500 mb-0"
+        />
+      </div>
       <select
         value={selectedExercise}
         onChange={(e) => setSelectedExercise(e.target.value)}
         className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-sm text-white mb-1 focus:outline-none focus:border-indigo-500"
       >
         <option value="">Select exercise...</option>
-        {exercises.map((ex) => (
-          <option key={ex.id} value={ex.id}>{ex.name} ({ex.muscle_group})</option>
-        ))}
+        {exercises
+          .filter((ex) => ex.name.toLowerCase().includes(exerciseSearch.toLowerCase()))
+          .map((ex) => (
+            <option key={ex.id} value={ex.id}>{ex.name} ({ex.muscle_group})</option>
+          ))}
       </select>
       <button
         onClick={() => setShowNewExercise(!showNewExercise)}
