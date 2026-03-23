@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Check, Trash2, ArrowLeftRight, Plus } from 'lucide-react'
+import { ChevronDown, ChevronUp, Check, Trash2, ArrowLeftRight, Plus, MessageSquare, Target } from 'lucide-react'
 import SetInput from './SetInput'
 import { categoryColors, volume } from '../lib/utils'
 
@@ -12,6 +12,7 @@ export default function WorkoutExerciseCard({
   onToggleSetDone,
   onRemove,
   onSwap,
+  onUpdateNote,
   allExercises,
 }) {
   const [showSwap, setShowSwap] = useState(false)
@@ -92,6 +93,24 @@ export default function WorkoutExerciseCard({
       {/* Expanded content */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-3">
+          {/* Coach suggestion from template */}
+          {exercise.suggestion && (
+            <div className="flex items-start gap-2 bg-indigo-500/8 border border-indigo-500/15 rounded-lg px-3 py-2">
+              <Target size={14} className="text-indigo-400 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                {(exercise.suggestion.targetReps || exercise.suggestion.targetWeight) && (
+                  <p className="text-xs text-indigo-300 font-medium">
+                    {exercise.suggestion.targetSets && `${exercise.suggestion.targetSets}×`}
+                    {exercise.suggestion.targetReps || '?'} @ {exercise.suggestion.targetWeight || '?'} lbs
+                  </p>
+                )}
+                {exercise.suggestion.note && (
+                  <p className="text-xs text-indigo-300/70 mt-0.5">{exercise.suggestion.note}</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Last time reference */}
           {lastSets.length > 0 && (
             <div className="flex gap-2 flex-wrap">
@@ -139,6 +158,18 @@ export default function WorkoutExerciseCard({
             >
               <Trash2 size={14} /> Remove
             </button>
+          </div>
+
+          {/* Session note */}
+          <div className="flex items-center gap-2">
+            <MessageSquare size={14} className="text-[#555] shrink-0" />
+            <input
+              type="text"
+              placeholder="Add a note..."
+              value={exercise.note || ''}
+              onChange={(e) => onUpdateNote(index, e.target.value)}
+              className="flex-1 bg-transparent border-b border-[#2a2a2a] text-xs text-[#a0a0a0] placeholder-[#444] py-1 focus:outline-none focus:border-indigo-500/50 transition-colors"
+            />
           </div>
 
           {/* Swap picker */}

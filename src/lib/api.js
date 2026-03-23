@@ -49,10 +49,12 @@ export async function getRecentHistory(limit = 50) {
   return data
 }
 
-export async function addSession(exerciseId, date, day, sets) {
+export async function addSession(exerciseId, date, day, sets, note) {
+  const row = { exercise_id: exerciseId, date, day, sets }
+  if (note) row.note = note
   const { data, error } = await supabase
     .from('history')
-    .insert({ exercise_id: exerciseId, date, day, sets })
+    .insert(row)
     .select()
   if (error) throw error
   return data[0]

@@ -5,7 +5,7 @@ import { useWorkoutSession } from '../hooks/useWorkoutSession'
 import { getTemplates, getExercises } from '../lib/api'
 import { loadWorkoutState } from '../lib/workoutStorage'
 import WorkoutExerciseCard from '../components/WorkoutExerciseCard'
-import { today } from '../lib/utils'
+import { today, templateExerciseIds } from '../lib/utils'
 
 export default function WorkoutSession() {
   const { dayId } = useParams()
@@ -56,7 +56,7 @@ function DayPicker() {
       {/* Day cards */}
       <div className="space-y-3">
         {templates.map((tpl) => {
-          const exIds = tpl.exercises || []
+          const exIds = templateExerciseIds(tpl.exercises)
           const muscleGroups = [...new Set(exIds.map((id) => exMap[id]?.muscle_group).filter(Boolean))]
 
           return (
@@ -129,6 +129,7 @@ function LiveWorkout({ dayId }) {
     addExercise,
     removeExercise,
     swapExercise,
+    updateNote,
     updateDate,
     finishWorkout,
     discardWorkout,
@@ -241,6 +242,7 @@ function LiveWorkout({ dayId }) {
             onToggleSetDone={toggleSetDone}
             onRemove={removeExercise}
             onSwap={swapExercise}
+            onUpdateNote={updateNote}
             allExercises={allExercises}
           />
         ))}

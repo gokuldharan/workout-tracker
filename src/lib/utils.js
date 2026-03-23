@@ -25,3 +25,14 @@ export const categoryColors = {
 
 export const toKebab = (str) =>
   str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+
+// Template exercises can be strings (legacy) or objects with suggestions
+// Normalizes to { id, targetSets, targetReps, targetWeight, note }
+export const normalizeTemplateExercise = (item) => {
+  if (typeof item === 'string') return { id: item }
+  return item
+}
+
+// Extract just the exercise IDs from a (possibly mixed) template exercises array
+export const templateExerciseIds = (exercises) =>
+  (exercises || []).map((e) => normalizeTemplateExercise(e).id)

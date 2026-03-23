@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getTemplate, getExercises, getLastSessionsForExercises, addSessionBatch } from '../lib/api'
 import { saveWorkoutState, loadWorkoutState, clearWorkoutState } from '../lib/workoutStorage'
-import { today } from '../lib/utils'
+import { today, normalizeTemplateExercise } from '../lib/utils'
 
 export function useWorkoutSession(dayId) {
   const [state, setState] = useState(null)
@@ -30,7 +30,8 @@ export function useWorkoutSession(dayId) {
 
       // Load template and build fresh state
       const template = await getTemplate(Number(dayId))
-      const exerciseIds = template.exercises || []
+      const templateEntries = (template.exercises || []).map(normalizeTemplateExercise)
+      const exerciseIds = templateEntries.map((e) => e.id)
 
       const [lastSessions] = await Promise.all([
         getLastSessionsForExercises(exerciseIds),
@@ -40,22 +41,29 @@ export function useWorkoutSession(dayId) {
       setAllExercises(allEx)
       const exMap = Object.fromEntries(allEx.map((e) => [e.id, e]))
 
-      const exercises = exerciseIds.map((id) => {
-        const ex = exMap[id]
-        const last = lastSessions[id]
+      const exercises = templateEntries.map((entry) => {
+        const ex = exMap[entry.id]
+        const last = lastSessions[entry.id]
         const lastSets = last ? last.sets : []
         // Pre-fill with last session's values or 3 empty sets — each set has done:false
         const sets = lastSets.length
           ? lastSets.map((s) => ({ r: s.r, w: s.w, done: false }))
           : [{ r: 10, w: 0, done: false }, { r: 10, w: 0, done: false }, { r: 10, w: 0, done: false }]
 
+        // Build suggestion from template entry (if AI/user set targets)
+        const suggestion = (entry.targetReps || entry.targetWeight || entry.note)
+          ? { targetSets: entry.targetSets, targetReps: entry.targetReps, targetWeight: entry.targetWeight, note: entry.note }
+          : null
+
         return {
-          exerciseId: id,
-          name: ex?.name || id,
+          exerciseId: entry.id,
+          name: ex?.name || entry.id,
           category: ex?.category || '',
           muscleGroup: ex?.muscle_group || '',
           sets,
           lastSets,
+          suggestion,
+          note: '',
           done: false,
           isFromTemplate: true,
         }
@@ -176,6 +184,15 @@ export function useWorkoutSession(dayId) {
     })
   }, [])
 
+  const updateNote = useCallback((exerciseIndex, note) => {
+    setState((prev) => {
+      if (!prev) return prev
+      const exercises = [...prev.exercises]
+      exercises[exerciseIndex] = { ...exercises[exerciseIndex], note }
+      return { ...prev, exercises }
+    })
+  }, [])
+
   const updateDate = useCallback((date) => {
     setState((prev) => (prev ? { ...prev, date } : prev))
   }, [])
@@ -192,12 +209,14 @@ export function useWorkoutSession(dayId) {
           const setsToSave = mode === 'completed'
             ? ex.sets.filter((s) => s.done && s.r > 0)
             : ex.sets.filter((s) => s.r > 0)
-          return {
+          const row = {
             exercise_id: ex.exerciseId,
             date: state.date,
             day: state.dayName,
             sets: setsToSave.map(({ r, w }) => ({ r, w })),
           }
+          if (ex.note?.trim()) row.note = ex.note.trim()
+          return row
         })
         .filter((s) => s.sets.length > 0)
 
@@ -241,6 +260,7 @@ export function useWorkoutSession(dayId) {
     addExercise,
     removeExercise,
     swapExercise,
+    updateNote,
     updateDate,
     finishWorkout,
     discardWorkout,

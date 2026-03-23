@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, ArrowUp, ArrowDown, X, Plus, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowUp, ArrowDown, X, Plus, Save, Trash2, ChevronDown, ChevronUp, Target } from 'lucide-react'
 import { getTemplate, getTemplates, getExercises, updateTemplate, createTemplate, deleteTemplate } from '../lib/api'
-import { categoryColors } from '../lib/utils'
+import { categoryColors, normalizeTemplateExercise } from '../lib/utils'
 
 export default function TemplateEditor() {
   const { dayId } = useParams()
@@ -10,13 +10,15 @@ export default function TemplateEditor() {
   const isNew = dayId === 'new'
 
   const [templateName, setTemplateName] = useState('')
-  const [exerciseIds, setExerciseIds] = useState([])
+  // Each entry: { id, targetSets, targetReps, targetWeight, note }
+  const [entries, setEntries] = useState([])
   const [allExercises, setAllExercises] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [addId, setAddId] = useState('')
   const [nextId, setNextId] = useState(4)
+  const [expandedIndex, setExpandedIndex] = useState(-1)
 
   useEffect(() => {
     async function init() {
@@ -28,11 +30,11 @@ export default function TemplateEditor() {
         const maxId = templates.reduce((max, t) => Math.max(max, t.id), 0)
         setNextId(maxId + 1)
         setTemplateName(`Day ${maxId + 1}`)
-        setExerciseIds([])
+        setEntries([])
       } else {
         const tpl = await getTemplate(Number(dayId))
         setTemplateName(tpl.name)
-        setExerciseIds(tpl.exercises || [])
+        setEntries((tpl.exercises || []).map(normalizeTemplateExercise))
       }
       setLoading(false)
     }
@@ -43,37 +45,57 @@ export default function TemplateEditor() {
 
   const moveUp = (i) => {
     if (i === 0) return
-    const arr = [...exerciseIds]
+    const arr = [...entries]
     ;[arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]
-    setExerciseIds(arr)
+    setEntries(arr)
   }
 
   const moveDown = (i) => {
-    if (i === exerciseIds.length - 1) return
-    const arr = [...exerciseIds]
+    if (i === entries.length - 1) return
+    const arr = [...entries]
     ;[arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]
-    setExerciseIds(arr)
+    setEntries(arr)
   }
 
   const remove = (i) => {
-    setExerciseIds(exerciseIds.filter((_, idx) => idx !== i))
+    setEntries(entries.filter((_, idx) => idx !== i))
+    if (expandedIndex === i) setExpandedIndex(-1)
+    else if (expandedIndex > i) setExpandedIndex(expandedIndex - 1)
   }
 
   const handleAdd = () => {
-    if (!addId || exerciseIds.includes(addId)) return
-    setExerciseIds([...exerciseIds, addId])
+    if (!addId || entries.some((e) => e.id === addId)) return
+    setEntries([...entries, { id: addId }])
     setAddId('')
     setShowAdd(false)
+  }
+
+  const updateEntry = (i, field, value) => {
+    const arr = [...entries]
+    arr[i] = { ...arr[i], [field]: value || undefined }
+    setEntries(arr)
   }
 
   const handleSave = async () => {
     if (!templateName.trim()) { alert('Template name is required'); return }
     setSaving(true)
     try {
+      // Clean entries: strip empty suggestion fields, collapse to string if no suggestions
+      const exercisesData = entries.map((entry) => {
+        const hasSuggestion = entry.targetSets || entry.targetReps || entry.targetWeight || entry.note
+        if (!hasSuggestion) return entry.id
+        const obj = { id: entry.id }
+        if (entry.targetSets) obj.targetSets = entry.targetSets
+        if (entry.targetReps) obj.targetReps = entry.targetReps
+        if (entry.targetWeight) obj.targetWeight = entry.targetWeight
+        if (entry.note) obj.note = entry.note
+        return obj
+      })
+
       if (isNew) {
-        await createTemplate(nextId, templateName.trim(), exerciseIds)
+        await createTemplate(nextId, templateName.trim(), exercisesData)
       } else {
-        await updateTemplate(Number(dayId), exerciseIds, templateName.trim())
+        await updateTemplate(Number(dayId), exercisesData, templateName.trim())
       }
       navigate('/workout')
     } catch (err) {
@@ -101,7 +123,7 @@ export default function TemplateEditor() {
     )
   }
 
-  const usedIds = new Set(exerciseIds)
+  const usedIds = new Set(entries.map((e) => e.id))
 
   return (
     <div className="px-4 pt-safe pb-nav-safe max-w-lg mx-auto w-full">
@@ -131,50 +153,118 @@ export default function TemplateEditor() {
 
       {/* Exercise list */}
       <div className="space-y-2 mb-4">
-        {exerciseIds.map((id, i) => {
-          const ex = exMap[id]
+        {entries.map((entry, i) => {
+          const ex = exMap[entry.id]
           if (!ex) return null
           const colors = categoryColors[ex.category] || categoryColors['Core']
+          const isOpen = expandedIndex === i
+          const hasSuggestion = entry.targetSets || entry.targetReps || entry.targetWeight || entry.note
 
           return (
             <div
-              key={id}
-              className="flex items-center gap-2 bg-[#1a1a1a] rounded-xl p-3 border border-[#2a2a2a]"
+              key={entry.id}
+              className="bg-[#1a1a1a] rounded-xl border border-[#2a2a2a] overflow-hidden"
             >
-              <span className="text-xs text-[#555] w-5 text-center font-mono">{i + 1}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white truncate">{ex.name}</p>
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
-                  {ex.muscle_group}
-                </span>
+              <div className="flex items-center gap-2 p-3">
+                <span className="text-xs text-[#555] w-5 text-center font-mono">{i + 1}</span>
+                <button
+                  onClick={() => setExpandedIndex(isOpen ? -1 : i)}
+                  className="flex-1 min-w-0 text-left"
+                >
+                  <p className="text-sm text-white truncate">{ex.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
+                      {ex.muscle_group}
+                    </span>
+                    {hasSuggestion && (
+                      <span className="text-xs text-indigo-400/60 flex items-center gap-0.5">
+                        <Target size={10} /> programmed
+                      </span>
+                    )}
+                  </div>
+                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => moveUp(i)}
+                    disabled={i === 0}
+                    className="p-1.5 text-[#a0a0a0] hover:text-white disabled:text-[#333] transition-colors"
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                  <button
+                    onClick={() => moveDown(i)}
+                    disabled={i === entries.length - 1}
+                    className="p-1.5 text-[#a0a0a0] hover:text-white disabled:text-[#333] transition-colors"
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                  <button
+                    onClick={() => remove(i)}
+                    className="p-1.5 text-[#a0a0a0] hover:text-red-400 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => moveUp(i)}
-                  disabled={i === 0}
-                  className="p-1.5 text-[#a0a0a0] hover:text-white disabled:text-[#333] transition-colors"
-                >
-                  <ArrowUp size={14} />
-                </button>
-                <button
-                  onClick={() => moveDown(i)}
-                  disabled={i === exerciseIds.length - 1}
-                  className="p-1.5 text-[#a0a0a0] hover:text-white disabled:text-[#333] transition-colors"
-                >
-                  <ArrowDown size={14} />
-                </button>
-                <button
-                  onClick={() => remove(i)}
-                  className="p-1.5 text-[#a0a0a0] hover:text-red-400 transition-colors"
-                >
-                  <X size={14} />
-                </button>
-              </div>
+
+              {/* Suggestion editor (expanded) */}
+              {isOpen && (
+                <div className="px-3 pb-3 pt-1 border-t border-[#222] space-y-2">
+                  <p className="text-xs text-[#666] flex items-center gap-1">
+                    <Target size={12} /> Coaching targets
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-xs text-[#555] block mb-1">Sets</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="—"
+                        value={entry.targetSets || ''}
+                        onChange={(e) => updateEntry(i, 'targetSets', Number(e.target.value) || undefined)}
+                        className="w-full bg-[#222] border border-[#2a2a2a] rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-[#555] block mb-1">Reps</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="—"
+                        value={entry.targetReps || ''}
+                        onChange={(e) => updateEntry(i, 'targetReps', Number(e.target.value) || undefined)}
+                        className="w-full bg-[#222] border border-[#2a2a2a] rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-[#555] block mb-1">Weight</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="lbs"
+                        value={entry.targetWeight || ''}
+                        onChange={(e) => updateEntry(i, 'targetWeight', Number(e.target.value) || undefined)}
+                        className="w-full bg-[#222] border border-[#2a2a2a] rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#555] block mb-1">Note</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. RIR 2, slow eccentric, pause at bottom..."
+                      value={entry.note || ''}
+                      onChange={(e) => updateEntry(i, 'note', e.target.value || undefined)}
+                      className="w-full bg-[#222] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white placeholder-[#444] focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )
         })}
 
-        {exerciseIds.length === 0 && (
+        {entries.length === 0 && (
           <p className="text-sm text-[#555] text-center py-6">No exercises yet. Add some below.</p>
         )}
       </div>
